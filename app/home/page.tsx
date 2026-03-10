@@ -2,31 +2,24 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import JourneyMap from "@/components/home/JourneyMap"
 import { hasCompletedOnboarding } from "@/lib/storage/user"
 
 // ─────────────────────────────────────────────
-// / root
+// /home page
 //
-// Entry point. Redirects immediately:
-// - No profile → /onboarding
-// - Has profile → /home
+// Gate: redirect to onboarding if no profile.
+// Otherwise render the journey map.
 // ─────────────────────────────────────────────
 
-export default function RootPage() {
+export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (hasCompletedOnboarding()) {
-      router.replace("/home")
-    } else {
+    if (!hasCompletedOnboarding()) {
       router.replace("/onboarding")
     }
   }, [router])
 
-  // Blank while redirecting
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-    </div>
-  )
+  return <JourneyMap />
 }
