@@ -98,20 +98,6 @@ export default function SessionAnalyzer() {
   }
 
   // ── Real audio waveform via Web Audio API ────
-  const setupWaveform = useCallback((stream: MediaStream) => {
-    try {
-      const audioCtx = new AudioContext()
-      const source = audioCtx.createMediaStreamSource(stream)
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 128
-      source.connect(analyser)
-      analyserRef.current = analyser
-      drawWaveform()
-    } catch (err) {
-      console.warn("Web Audio API unavailable:", err)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
   const drawWaveform = useCallback(() => {
     const canvas = canvasRef.current
     const analyser = analyserRef.current
@@ -151,6 +137,23 @@ export default function SessionAnalyzer() {
 
     draw()
   }, [])
+
+  const setupWaveform = useCallback(
+    (stream: MediaStream) => {
+      try {
+        const audioCtx = new AudioContext()
+        const source = audioCtx.createMediaStreamSource(stream)
+        const analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 128
+        source.connect(analyser)
+        analyserRef.current = analyser
+        drawWaveform()
+      } catch (err) {
+        console.warn("Web Audio API unavailable:", err)
+      }
+    },
+    [drawWaveform]
+  )
 
   const stopWaveform = useCallback(() => {
     if (waveAnimRef.current !== undefined) {
