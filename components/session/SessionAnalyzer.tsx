@@ -5,6 +5,11 @@ import { useFaceAnalysis } from "@/hooks/useFaceAnalysis"
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis"
 import { DEFAULT_CONFIG } from "@/lib/session-config"
 import type { Nudge } from "@/types/session"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 
 // ─────────────────────────────────────────────
 // SessionAnalyzer
@@ -167,7 +172,7 @@ export default function SessionAnalyzer() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-foreground">
       {/* Header */}
-      <div className="space-y-1 text-center">
+      <div className="flex flex-col gap-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
         <p className="font-mono text-xs text-muted-foreground">
           {!isReady
@@ -190,9 +195,10 @@ export default function SessionAnalyzer() {
           autoPlay
           playsInline
           muted
-          className={`absolute inset-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-300 ${
+          className={cn(
+            "absolute inset-0 size-full -scale-x-100 object-cover transition-opacity duration-300",
             showDebugFeed ? "opacity-100" : "opacity-0"
-          }`}
+          )}
         />
 
         {/* Gradient overlay — always shown, dims debug feed nicely too */}
@@ -209,15 +215,21 @@ export default function SessionAnalyzer() {
 
         {/* Eye contact indicator — top left */}
         {isActive && (
-          <div className="absolute top-4 left-4 flex items-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full transition-colors ${
-                frameMetrics?.eyeContact ? "bg-primary" : "bg-muted-foreground"
-              }`}
-            />
-            <span className="font-mono text-xs text-muted-foreground">
+          <div className="absolute top-4 left-4">
+            <Badge
+              variant={frameMetrics?.eyeContact ? "default" : "secondary"}
+              className="font-mono"
+            >
+              <span
+                className={cn(
+                  "size-2 rounded-full transition-colors",
+                  frameMetrics?.eyeContact
+                    ? "bg-primary-foreground"
+                    : "bg-muted-foreground"
+                )}
+              />
               {frameMetrics?.eyeContact ? "Eye contact" : "Look at camera"}
-            </span>
+            </Badge>
           </div>
         )}
 
@@ -258,20 +270,23 @@ export default function SessionAnalyzer() {
 
         {/* Debug toggle — dev only */}
         {isDev && (
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setShowDebugFeed((p) => !p)}
-            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 hover:text-muted-foreground"
           >
             {showDebugFeed ? "hide feed" : "debug feed"}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Error state */}
       {cameraError && (
-        <p className="max-w-sm text-center font-mono text-xs text-destructive">
-          {cameraError}
-        </p>
+        <Alert variant="destructive" className="max-w-sm font-mono text-xs">
+          <AlertTitle>Camera Error</AlertTitle>
+          <AlertDescription>{cameraError}</AlertDescription>
+        </Alert>
       )}
 
       {/* ── Metrics Grid ───────────────────────── */}
@@ -379,23 +394,19 @@ export default function SessionAnalyzer() {
       )}
 
       {/* ── Start / End button ─────────────────── */}
-      <button
+      <Button
         onClick={toggleSession}
         disabled={!isReady}
-        className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
-          !isReady
-            ? "cursor-not-allowed bg-muted text-muted-foreground"
-            : isActive
-              ? "bg-destructive text-white hover:opacity-90"
-              : "bg-primary text-primary-foreground hover:opacity-90"
-        }`}
+        variant={isActive ? "destructive" : "default"}
+        size="lg"
+        className="rounded-full px-10 font-mono text-sm font-bold"
       >
         {!isReady
           ? "Loading AI..."
           : isActive
             ? "End Session"
             : "Start Session"}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -413,15 +424,16 @@ function formatDuration(seconds: number): string {
 function NudgeBanner({ nudge }: { nudge: Nudge }) {
   const isPositive = nudge.type === "positive-streak"
   return (
-    <div
-      className={`absolute right-4 bottom-20 left-4 animate-in rounded-xl px-4 py-2.5 text-center font-mono text-sm backdrop-blur-sm transition-all duration-300 fade-in slide-in-from-bottom-2 ${
+    <Alert
+      className={cn(
+        "absolute right-4 bottom-20 left-4 animate-in text-center font-mono backdrop-blur-sm fade-in slide-in-from-bottom-2",
         isPositive
-          ? "border border-primary/30 bg-primary/20 text-primary"
-          : "border border-border bg-card/80 text-foreground"
-      }`}
+          ? "border-primary/30 bg-primary/20 text-primary"
+          : "bg-card/80"
+      )}
     >
-      {nudge.message}
-    </div>
+      <AlertDescription className="text-sm">{nudge.message}</AlertDescription>
+    </Alert>
   )
 }
 
@@ -437,24 +449,27 @@ function MetricCard({
   detail: string
 }) {
   return (
-    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
-      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p
-        className={`font-mono text-lg font-bold ${
-          status === "good"
-            ? "text-primary"
-            : status === "bad"
-              ? "text-destructive"
-              : "text-muted-foreground"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="text-[11px] leading-tight text-muted-foreground">
-        {detail}
-      </p>
-    </div>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p
+          className={cn(
+            "font-mono text-lg font-bold",
+            status === "good" && "text-primary",
+            status === "bad" && "text-destructive",
+            status === "neutral" && "text-muted-foreground"
+          )}
+        >
+          {value}
+        </p>
+        <p className="text-[11px] leading-tight text-muted-foreground">
+          {detail}
+        </p>
+      </CardContent>
+    </Card>
   )
 }

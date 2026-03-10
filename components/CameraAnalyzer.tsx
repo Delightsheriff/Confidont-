@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 export default function CameraAnalyzer() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -138,38 +140,34 @@ export default function CameraAnalyzer() {
 
   return (
     <div className="flex flex-col items-center gap-4 p-4">
-      <div className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-2xl border-4 border-slate-800 bg-black">
+      <div className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-2xl border-4 border-border bg-background">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="h-full w-full -scale-x-100 object-cover"
+          className="size-full -scale-x-100 object-cover"
         />
         {!isCameraReady && isSessionActive && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
+          <div className="absolute inset-0 flex items-center justify-center bg-background/50 text-foreground">
             Initialising...
           </div>
         )}
       </div>
 
-      <button
+      <Button
         onClick={toggleSession}
         disabled={!landmarker}
-        className={`rounded-full px-8 py-3 font-bold text-white transition-all ${
-          !landmarker
-            ? "cursor-not-allowed bg-gray-400"
-            : isSessionActive
-              ? "bg-red-600 hover:bg-red-700"
-              : "bg-blue-600 hover:bg-blue-700"
-        }`}
+        variant={isSessionActive ? "destructive" : "default"}
+        size="lg"
+        className="rounded-full px-8 font-bold"
       >
         {!landmarker
           ? "Loading AI..."
           : isSessionActive
             ? "End Session"
             : "Start Session"}
-      </button>
+      </Button>
     </div>
   )
 }
