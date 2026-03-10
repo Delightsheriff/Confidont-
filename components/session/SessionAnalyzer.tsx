@@ -4,7 +4,9 @@ import { useRef, useState, useCallback, useEffect } from "react"
 import { useFaceAnalysis } from "@/hooks/useFaceAnalysis"
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis"
 import { DEFAULT_CONFIG } from "@/lib/session-config"
-import type { Nudge } from "@/types/session"
+import { generateTopics } from "@/lib/ai/topics"
+import type { SessionTopic } from "@/lib/ai/topics"
+import type { Nudge, SessionScore } from "@/types/session"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -14,33 +16,68 @@ import { Badge } from "@/components/ui/badge"
 // ─────────────────────────────────────────────
 // SessionAnalyzer
 //
-// UI layer — wires useFaceAnalysis + useAudioAnalysis.
+// Full session flow:
+// idle → loading topics → topic 1 → topic 2 → topic 3 → done
 //
-// Layout:
-// - One large session box
-// - Video feed rendered in DOM but invisible (opacity-0)
-//   so MediaPipe receives valid frames
-// - Debug toggle (dev only) reveals video feed
-// - Real audio waveform via Web Audio API AnalyserNode
-// - Nudge banner floats above waveform
-// - Metrics grid below the box
+// Each topic has a 30s minimum before "Next Topic" appears.
+// User moves at their own pace after the minimum.
+// Session ends after all topics — passes scores to onSessionComplete.
 // ─────────────────────────────────────────────
 
 const isDev = process.env.NODE_ENV === "development"
+const MINIMUM_TOPIC_SECONDS = 30
 
-export default function SessionAnalyzer() {
+type SessionState = "idle" | "loading-topics" | "active" | "done"
+
+interface SessionAnalyzerProps {
+  phase?: number
+  personaName?: string
+  userName?: string
+  goal?: string
+  weakAreas?: string[]
+  completedTopics?: string[]
+  totalSessions?: number
+  onSessionComplete: (result: SessionResult) => void
+}
+
+export interface SessionResult {
+  score: SessionScore
+  fillerWordCount: number
+  topics: SessionTopic[]
+  durationSeconds: number
+}
+
+export default function SessionAnalyzer({
+  phase = 1,
+  personaName = "Maya",
+  userName = "there",
+  goal = "general comfort",
+  weakAreas = [],
+  completedTopics = [],
+  totalSessions = 0,
+  onSessionComplete,
+}: SessionAnalyzerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const waveAnimRef = useRef<number | undefined>(undefined)
 
-  const [isSessionActive, setIsSessionActive] = useState(false)
+  // Session state machine
+  const [sessionState, setSessionState] = useState<SessionState>("idle")
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [showDebugFeed, setShowDebugFeed] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
+  // Topic flow
+  const [topics, setTopics] = useState<SessionTopic[]>([])
+  const [topicIndex, setTopicIndex] = useState(0)
+  const [topicSeconds, setTopicSeconds] = useState(0)
+  const [canAdvance, setCanAdvance] = useState(false)
+  const topicTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const config = DEFAULT_CONFIG
-  const isActive = isSessionActive && isCameraReady
+  const isActive = sessionState === "active" && isCameraReady
+  const currentTopic = topics[topicIndex] ?? null
 
   const { frameMetrics, sessionScore, activeNudge, isReady } = useFaceAnalysis(
     videoRef,
@@ -49,60 +86,29 @@ export default function SessionAnalyzer() {
   )
 
   const { fillerWordCount, detectedFillers, silenceDuration, isListening } =
-    useAudioAnalysis(isSessionActive, config)
+    useAudioAnalysis(isActive, config)
 
-  // ── Session control ──────────────────────────
-  const toggleSession = async () => {
-    if (isSessionActive) {
-      setIsSessionActive(false)
-      setIsCameraReady(false)
-      stopWaveform()
-
-      if (videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream
-        stream.getTracks().forEach((t) => t.stop())
-        videoRef.current.srcObject = null
-      }
-      analyserRef.current = null
-    } else {
-      setCameraError(null)
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720, facingMode: "user" },
-          audio: true,
-        })
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          videoRef.current.onloadeddata = () => {
-            setIsCameraReady(true)
-            setIsSessionActive(true)
-            setupWaveform(stream)
-          }
-        }
-      } catch (err) {
-        const isNotFound =
-          err instanceof DOMException && err.name === "NotFoundError"
-        const isDenied =
-          err instanceof DOMException && err.name === "NotAllowedError"
-        setCameraError(
-          isNotFound
-            ? "No camera or microphone found. Please connect a device and try again."
-            : isDenied
-              ? "Camera/mic access was denied. Please allow access in your browser settings."
-              : `Could not access camera: ${err instanceof Error ? err.message : "Unknown error"}`
-        )
-        console.error("Camera/mic error:", err)
-      }
+  // ── Camera helpers ───────────────────────────
+  const startCamera = useCallback(async (): Promise<MediaStream | null> => {
+    setCameraError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: "user" },
+        audio: true,
+      })
+      return stream
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      setCameraError(`Camera access denied: ${msg}`)
+      return null
     }
-  }
+  }, [])
 
-  // ── Real audio waveform via Web Audio API ────
+  // ── Waveform ─────────────────────────────────
   const drawWaveform = useCallback(() => {
     const canvas = canvasRef.current
     const analyser = analyserRef.current
     if (!canvas || !analyser) return
-
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
@@ -112,7 +118,6 @@ export default function SessionAnalyzer() {
     const draw = () => {
       waveAnimRef.current = requestAnimationFrame(draw)
       analyser.getByteFrequencyData(dataArray)
-
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       const barWidth = (canvas.width / bufferLength) * 1.5
@@ -120,7 +125,6 @@ export default function SessionAnalyzer() {
 
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = (dataArray[i] / 255) * canvas.height * 0.9
-        // Use CSS variable colour — teal primary
         ctx.fillStyle = `rgba(81, 150, 150, ${0.4 + (dataArray[i] / 255) * 0.6})`
         ctx.beginPath()
         ctx.roundRect(
@@ -134,7 +138,6 @@ export default function SessionAnalyzer() {
         x += barWidth + 1
       }
     }
-
     draw()
   }, [])
 
@@ -161,28 +164,153 @@ export default function SessionAnalyzer() {
       waveAnimRef.current = undefined
     }
     const canvas = canvasRef.current
-    if (canvas) {
-      const ctx = canvas.getContext("2d")
-      ctx?.clearRect(0, 0, canvas.width, canvas.height)
+    if (canvas)
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
+  }, [])
+
+  const stopCamera = useCallback(() => {
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach((t) => t.stop())
+      videoRef.current.srcObject = null
+    }
+    analyserRef.current = null
+    stopWaveform()
+  }, [stopWaveform])
+
+  // ── Topic timer ──────────────────────────────
+  const startTopicTimer = useCallback(() => {
+    setTopicSeconds(0)
+    setCanAdvance(false)
+    if (topicTimerRef.current) clearInterval(topicTimerRef.current)
+
+    topicTimerRef.current = setInterval(() => {
+      setTopicSeconds((prev) => {
+        const next = prev + 1
+        if (next >= MINIMUM_TOPIC_SECONDS) setCanAdvance(true)
+        return next
+      })
+    }, 1000)
+  }, [])
+
+  const stopTopicTimer = useCallback(() => {
+    if (topicTimerRef.current) {
+      clearInterval(topicTimerRef.current)
+      topicTimerRef.current = null
     }
   }, [])
 
+  // ── Start session ────────────────────────────
+  const startSession = useCallback(async () => {
+    setSessionState("loading-topics")
+
+    // Load topics and camera in parallel
+    const [stream, loadedTopics] = await Promise.all([
+      startCamera(),
+      generateTopics({
+        name: userName,
+        goal,
+        phase,
+        weakAreas,
+        completedTopics,
+        totalSessions,
+      }),
+    ])
+
+    if (!stream) {
+      setSessionState("idle")
+      return
+    }
+
+    setTopics(loadedTopics)
+    setTopicIndex(0)
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      videoRef.current.onloadeddata = () => {
+        setIsCameraReady(true)
+        setSessionState("active")
+        setupWaveform(stream)
+        startTopicTimer()
+      }
+    }
+  }, [
+    startCamera,
+    setupWaveform,
+    startTopicTimer,
+    userName,
+    goal,
+    phase,
+    weakAreas,
+    completedTopics,
+    totalSessions,
+  ])
+
+  // ── Next topic ───────────────────────────────
+  const nextTopic = useCallback(() => {
+    stopTopicTimer()
+    const nextIndex = topicIndex + 1
+
+    if (nextIndex >= topics.length) {
+      // All topics done — end session
+      setSessionState("done")
+      stopCamera()
+      onSessionComplete({
+        score: sessionScore,
+        fillerWordCount,
+        topics,
+        durationSeconds: sessionScore.durationSeconds,
+      })
+    } else {
+      setTopicIndex(nextIndex)
+      startTopicTimer()
+    }
+  }, [
+    topicIndex,
+    topics,
+    stopTopicTimer,
+    startTopicTimer,
+    stopCamera,
+    onSessionComplete,
+    sessionScore,
+    fillerWordCount,
+  ])
+
+  // ── Restart session ──────────────────────────
+  const restartSession = useCallback(() => {
+    stopTopicTimer()
+    stopCamera()
+    setIsCameraReady(false)
+    setTopics([])
+    setTopicIndex(0)
+    setTopicSeconds(0)
+    setCanAdvance(false)
+    setSessionState("idle")
+  }, [stopTopicTimer, stopCamera])
+
   // Cleanup on unmount
   useEffect(() => {
-    return () => stopWaveform()
-  }, [stopWaveform])
+    return () => {
+      stopTopicTimer()
+      stopCamera()
+      stopWaveform()
+    }
+  }, [stopTopicTimer, stopCamera, stopWaveform])
 
+  // ── Render ───────────────────────────────────
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-foreground">
       {/* Header */}
-      <div className="flex flex-col gap-1 text-center">
+      <div className="space-y-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
         <p className="font-mono text-xs text-muted-foreground">
-          {!isReady
-            ? "Loading AI model..."
-            : isActive
-              ? "Session active — speak naturally"
-              : "Ready when you are"}
+          {sessionState === "loading-topics"
+            ? `${personaName} is getting ready...`
+            : sessionState === "active"
+              ? `Session ${topicIndex + 1} of ${topics.length}`
+              : isReady
+                ? "Ready when you are"
+                : "Loading AI model..."}
         </p>
       </div>
 
@@ -191,8 +319,7 @@ export default function SessionAnalyzer() {
         className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card"
         style={{ aspectRatio: "16/9" }}
       >
-        {/* Video element — ALWAYS in DOM for MediaPipe
-            opacity-0 hides it visually without removing it from layout */}
+        {/* Video — always in DOM, opacity controls visibility */}
         <video
           ref={videoRef}
           autoPlay
@@ -204,11 +331,11 @@ export default function SessionAnalyzer() {
           )}
         />
 
-        {/* Gradient overlay — always shown, dims debug feed nicely too */}
-        <div className="absolute inset-0 bg-linear-to-t from-card via-card/60 to-transparent" />
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
 
-        {/* Center content — idle state */}
-        {!isActive && (
+        {/* ── Idle state ── */}
+        {sessionState === "idle" && (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="font-mono text-sm text-muted-foreground">
               {isReady ? "Press Start Session to begin" : "Initialising AI..."}
@@ -216,37 +343,77 @@ export default function SessionAnalyzer() {
           </div>
         )}
 
-        {/* Eye contact indicator — top left */}
-        {isActive && (
-          <div className="absolute top-4 left-4">
-            <Badge
-              variant={frameMetrics?.eyeContact ? "default" : "secondary"}
-              className="font-mono"
-            >
-              <span
-                className={cn(
-                  "size-2 rounded-full transition-colors",
-                  frameMetrics?.eyeContact
-                    ? "bg-primary-foreground"
-                    : "bg-muted-foreground"
+        {/* ── Loading topics state ── */}
+        {sessionState === "loading-topics" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="font-mono text-sm text-muted-foreground">
+              Preparing your session...
+            </p>
+          </div>
+        )}
+
+        {/* ── Active state ── */}
+        {isActive && currentTopic && (
+          <>
+            {/* Eye contact indicator — top left */}
+            <div className="absolute top-4 left-4">
+              <Badge
+                variant={frameMetrics?.eyeContact ? "default" : "secondary"}
+                className="font-mono"
+              >
+                <span
+                  className={cn(
+                    "size-2 rounded-full transition-colors",
+                    frameMetrics?.eyeContact
+                      ? "bg-primary-foreground"
+                      : "bg-muted-foreground"
+                  )}
+                />
+                {frameMetrics?.eyeContact ? "Eye contact" : "Look at camera"}
+              </Badge>
+            </div>
+
+            {/* Duration — top right */}
+            <div className="absolute top-4 right-4 font-mono text-xs text-muted-foreground">
+              {formatDuration(sessionScore.durationSeconds)}
+            </div>
+
+            {/* Topic prompt — center */}
+            <div className="absolute inset-0 flex items-center justify-center px-8">
+              <div className="space-y-2 text-center">
+                <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
+                  Topic {topicIndex + 1} of {topics.length}
+                </p>
+                <p className="font-mono text-lg leading-snug text-foreground">
+                  {currentTopic.prompt}
+                </p>
+
+                {/* Minimum time progress — subtle fill bar */}
+                {!canAdvance && (
+                  <div className="mx-auto mt-3 w-32">
+                    <div className="h-0.5 overflow-hidden rounded-full bg-border">
+                      <div
+                        className="h-full bg-primary/50 transition-all duration-1000"
+                        style={{
+                          width: `${Math.min((topicSeconds / MINIMUM_TOPIC_SECONDS) * 100, 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1 text-center font-mono text-[10px] text-muted-foreground/50">
+                      {MINIMUM_TOPIC_SECONDS - topicSeconds}s
+                    </p>
+                  </div>
                 )}
-              />
-              {frameMetrics?.eyeContact ? "Eye contact" : "Look at camera"}
-            </Badge>
-          </div>
+              </div>
+            </div>
+
+            {/* Nudge banner */}
+            {activeNudge && <NudgeBanner nudge={activeNudge} />}
+          </>
         )}
 
-        {/* Duration — top right */}
-        {isActive && (
-          <div className="absolute top-4 right-4 font-mono text-xs text-muted-foreground">
-            {formatDuration(sessionScore.durationSeconds)}
-          </div>
-        )}
-
-        {/* Nudge banner — floats above waveform */}
-        {activeNudge && <NudgeBanner nudge={activeNudge} />}
-
-        {/* Waveform — bottom of box */}
+        {/* Waveform — bottom */}
         <div className="absolute right-0 bottom-0 left-0 flex h-16 items-end px-4 pb-3">
           {isActive ? (
             <canvas
@@ -256,15 +423,12 @@ export default function SessionAnalyzer() {
               className="h-12 w-full"
             />
           ) : (
-            // Static idle waveform
             <div className="flex h-8 w-full items-center gap-px">
               {Array.from({ length: 60 }).map((_, i) => (
                 <div
                   key={i}
                   className="flex-1 rounded-full bg-border"
-                  style={{
-                    height: `${Math.round(10 + Math.sin(i * 0.4) * 6)}%`,
-                  }}
+                  style={{ height: `${10 + Math.sin(i * 0.4) * 6}%` }}
                 />
               ))}
             </div>
@@ -284,7 +448,7 @@ export default function SessionAnalyzer() {
         )}
       </div>
 
-      {/* Error state */}
+      {/* Error */}
       {cameraError && (
         <Alert variant="destructive" className="max-w-sm font-mono text-xs">
           <AlertTitle>Camera Error</AlertTitle>
@@ -292,7 +456,7 @@ export default function SessionAnalyzer() {
         </Alert>
       )}
 
-      {/* ── Metrics Grid ───────────────────────── */}
+      {/* ── Metrics Grid — active only ─────────── */}
       {isActive && (
         <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
           <MetricCard
@@ -389,33 +553,78 @@ export default function SessionAnalyzer() {
             status={isListening ? "good" : "neutral"}
             detail={
               silenceDuration > 3
-                ? `${Math.round(silenceDuration)}s of silence`
+                ? `${Math.round(silenceDuration)}s silence`
                 : "Listening"
             }
           />
         </div>
       )}
 
-      {/* ── Start / End button ─────────────────── */}
-      <Button
-        onClick={toggleSession}
-        disabled={!isReady}
-        variant={isActive ? "destructive" : "default"}
-        size="lg"
-        className="rounded-full px-10 font-mono text-sm font-bold"
-      >
-        {!isReady
-          ? "Loading AI..."
-          : isActive
-            ? "End Session"
-            : "Start Session"}
-      </Button>
+      {/* ── Controls ───────────────────────────── */}
+      <div className="flex items-center gap-3">
+        {/* Restart — visible during active session */}
+        {sessionState === "active" && (
+          <Button
+            variant="outline"
+            onClick={restartSession}
+            className="rounded-full px-6 font-mono text-sm"
+          >
+            Restart
+          </Button>
+        )}
+
+        {/* Main CTA */}
+        {sessionState === "idle" && (
+          <Button
+            onClick={startSession}
+            disabled={!isReady}
+            size="lg"
+            className="rounded-full px-10 font-mono text-sm font-bold"
+          >
+            {isReady ? "Start Session" : "Loading AI..."}
+          </Button>
+        )}
+
+        {sessionState === "loading-topics" && (
+          <Button
+            disabled
+            size="lg"
+            className="rounded-full px-10 font-mono text-sm font-bold"
+          >
+            Preparing...
+          </Button>
+        )}
+
+        {/* Next Topic — appears after 30s minimum */}
+        {sessionState === "active" && canAdvance && (
+          <Button
+            onClick={nextTopic}
+            size="lg"
+            className="animate-in rounded-full px-10 font-mono text-sm font-bold fade-in slide-in-from-bottom-1"
+          >
+            {topicIndex < topics.length - 1
+              ? "Next Topic \u2192"
+              : "Finish Session"}
+          </Button>
+        )}
+
+        {/* Waiting for minimum time */}
+        {sessionState === "active" && !canAdvance && (
+          <Button
+            disabled
+            size="lg"
+            className="rounded-full px-10 font-mono text-sm font-bold"
+          >
+            Keep going...
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
 
 // ─────────────────────────────────────────────
-// Helpers & sub-components
+// Sub-components
 // ─────────────────────────────────────────────
 
 function formatDuration(seconds: number): string {
