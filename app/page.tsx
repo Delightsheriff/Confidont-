@@ -7,6 +7,14 @@ import { joinWaitlist } from "@/lib/storage/waitlist"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 
 export default function LandingPage() {
   const router = useRouter()
@@ -89,7 +97,7 @@ export default function LandingPage() {
               Three steps. Real progress.
             </h2>
           </div>
-          <div className="grid gap-8 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-3">
             {[
               {
                 step: "01",
@@ -107,17 +115,21 @@ export default function LandingPage() {
                 body: "After each session, your coach breaks down what went well and what to focus on next. Progress you can actually see.",
               },
             ].map((item) => (
-              <div key={item.step} className="flex flex-col gap-3">
-                <p className="font-mono text-3xl font-bold text-primary/20">
-                  {item.step}
-                </p>
-                <h3 className="font-mono text-base font-bold text-foreground">
-                  {item.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {item.body}
-                </p>
-              </div>
+              <Card key={item.step} className="border-primary/10 bg-primary/[0.02]">
+                <CardHeader>
+                  <p className="font-mono text-3xl font-bold text-primary/20">
+                    {item.step}
+                  </p>
+                  <CardTitle className="font-mono text-base">
+                    {item.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {item.body}
+                  </p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -164,20 +176,20 @@ export default function LandingPage() {
                 body: "Camera anxiety is more common than you think. You're not alone.",
               },
             ].map((item) => (
-              <div
+              <Card
                 key={item.title}
-                className="flex items-start gap-4 rounded-xl border border-border bg-card px-5 py-4"
+                className="flex items-start gap-4 p-4"
               >
                 <span className="mt-0.5 shrink-0 text-xl">{item.icon}</span>
                 <div>
-                  <p className="font-mono text-sm font-bold text-foreground">
+                  <CardTitle className="font-mono text-sm">
                     {item.title}
-                  </p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                  </CardTitle>
+                  <CardDescription className="mt-0.5 text-xs leading-relaxed">
                     {item.body}
-                  </p>
+                  </CardDescription>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -189,22 +201,28 @@ export default function LandingPage() {
         className="border-t border-border bg-card px-6 py-20"
       >
         <div className="mx-auto flex max-w-lg flex-col gap-8 text-center">
-          <div className="flex flex-col gap-3">
-            <p className="font-mono text-xs tracking-widest text-primary uppercase">
-              Waitlist
-            </p>
-            <h2 className="font-mono text-3xl font-bold text-foreground">
-              Get early access.
-            </h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Confidont is in beta. Join the waitlist and be among the first to
-              get full access when we launch.
-            </p>
-          </div>
-          <WaitlistForm />
-          <p className="font-mono text-xs text-muted-foreground/50">
-            No spam. Just one email when we&apos;re ready for you.
-          </p>
+          <Card className="border-none bg-transparent shadow-none">
+            <CardHeader>
+              <p className="font-mono text-xs tracking-widest text-primary uppercase">
+                Waitlist
+              </p>
+              <CardTitle className="font-mono text-3xl font-bold text-foreground">
+                Get early access.
+              </CardTitle>
+              <CardDescription className="text-sm leading-relaxed">
+                Confidont is in beta. Join the waitlist and be among the first to
+                get full access when we launch.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <WaitlistForm />
+            </CardContent>
+            <CardFooter className="justify-center">
+              <p className="font-mono text-xs text-muted-foreground/50">
+                No spam. Just one email when we&apos;re ready for you.
+              </p>
+            </CardFooter>
+          </Card>
         </div>
       </section>
 
@@ -249,28 +267,32 @@ function WaitlistForm() {
 
   if (formState === "success") {
     return (
-      <div className="flex flex-col gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-6 py-8">
-        <p className="text-2xl">🎉</p>
-        <p className="font-mono font-bold text-foreground">
-          You&apos;re on the list.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          We&apos;ll email you the moment early access opens.
-        </p>
-      </div>
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="flex flex-col gap-2 pt-6">
+          <p className="text-2xl">🎉</p>
+          <p className="font-mono font-bold text-foreground">
+            You&apos;re on the list.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            We&apos;ll email you the moment early access opens.
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 
   if (formState === "already") {
     return (
-      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card px-6 py-8">
-        <p className="font-mono font-bold text-foreground">
-          You&apos;re already on the list.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          We haven&apos;t forgotten about you.
-        </p>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col gap-2 pt-6">
+          <p className="font-mono font-bold text-foreground">
+            You&apos;re already on the list.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            We haven&apos;t forgotten about you.
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 

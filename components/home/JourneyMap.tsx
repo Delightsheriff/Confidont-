@@ -87,6 +87,11 @@ export default function JourneyMap() {
   const [toast, setToast] = useState<string | null>(null)
   const [showDayNudge, setShowDayNudge] = useState(false)
 
+  const fireToast = useCallback((msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2000)
+  }, [])
+
   if (!profile) {
     router.replace("/onboarding")
     return null
@@ -100,11 +105,6 @@ export default function JourneyMap() {
     PHASES.findLast(
       (p) => p.startsAt <= Math.max(progress.totalSessions + 1, 1)
     ) ?? PHASES[0]
-
-  const fireToast = useCallback((msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2000)
-  }, [])
 
   const handleCardTap = (card: SessionCardData) => {
     switch (card.state) {
@@ -192,7 +192,7 @@ export default function JourneyMap() {
 
         {/* Session path */}
         <div className="relative flex flex-col gap-3">
-          <div className="absolute top-8 bottom-8 left-[27px] -z-0 w-px bg-border" />
+          <div className="absolute top-8 bottom-8 left-6.75 z-0 w-px bg-border" />
 
           {cards.map((card, i) => {
             const isPhaseStart = PHASES.some(
@@ -215,7 +215,7 @@ export default function JourneyMap() {
               <span className="text-xs text-muted-foreground/40">∞</span>
             </div>
             <p className="font-mono text-xs text-muted-foreground/40">
-              The journey doesn't end here.
+              The journey doesn&apos;t end here.
             </p>
           </div>
         </div>
@@ -480,11 +480,11 @@ function DayNudgeModal({
         <div className="mx-auto h-1 w-8 rounded-full bg-border" />
         <div className="flex flex-col gap-1.5">
           <p className="font-mono text-base font-bold text-foreground">
-            That's your {limitForToday} for today.
+            That&apos;s your {limitForToday} for today.
           </p>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {personaName} will be here {nextUnlockDate}. But if you want to keep
-            going — you've earned it.
+            going — you&apos;ve earned it.
           </p>
         </div>
         <div className="flex flex-col gap-2">
