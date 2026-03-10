@@ -71,8 +71,11 @@ export default function CameraAnalyzer() {
 
   // Improved Logic for accuracy
   const processMetrics = (landmarks: { x: number; y: number; z: number }[]) => {
-    const getGaze = (iris: { x: number; y: number; z: number }, inner: { x: number; y: number; z: number }, outer: { x: number; y: number; z: number }) =>
-      (iris.x - inner.x) / (outer.x - inner.x)
+    const getGaze = (
+      iris: { x: number; y: number; z: number },
+      inner: { x: number; y: number; z: number },
+      outer: { x: number; y: number; z: number }
+    ) => (iris.x - inner.x) / (outer.x - inner.x)
 
     const leftGaze = getGaze(landmarks[468], landmarks[33], landmarks[133])
     const rightGaze = getGaze(landmarks[473], landmarks[362], landmarks[263])
