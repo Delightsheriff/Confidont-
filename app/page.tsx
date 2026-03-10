@@ -4,6 +4,9 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { hasCompletedOnboarding } from "@/lib/storage/user"
 import { joinWaitlist } from "@/lib/storage/waitlist"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 
 export default function LandingPage() {
   const router = useRouter()
@@ -20,23 +23,25 @@ export default function LandingPage() {
           <span className="font-mono text-lg font-bold text-primary">
             Confidont
           </span>
-          <button
+          <Button
             onClick={handleTryIt}
-            className="rounded-full bg-primary px-5 py-2 font-mono text-xs font-bold text-primary-foreground transition-all hover:opacity-90"
+            size="sm"
+            className="rounded-full px-5 font-mono text-xs"
           >
             Try it free →
-          </button>
+          </Button>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="mx-auto max-w-3xl space-y-6 px-6 pt-20 pb-24 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-          <span className="font-mono text-xs text-primary">
-            Beta — limited access
-          </span>
-        </div>
+      <section className="mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 pt-20 pb-24 text-center">
+        <Badge
+          variant="outline"
+          className="h-auto gap-2 rounded-full border-primary/20 bg-primary/5 px-4 py-1.5 font-mono text-xs text-primary"
+        >
+          <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+          Beta — limited access
+        </Badge>
 
         <h1 className="font-mono text-5xl leading-tight font-bold tracking-tight text-foreground sm:text-6xl">
           Stop dreading
@@ -51,18 +56,21 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col items-center justify-center gap-3 pt-2 sm:flex-row">
-          <button
+          <Button
             onClick={handleTryIt}
-            className="w-full rounded-full bg-primary px-8 py-3.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90 sm:w-auto"
+            size="lg"
+            className="w-full rounded-full px-8 font-mono sm:w-auto"
           >
             Try it free →
-          </button>
-          <a
-            href="#waitlist"
-            className="w-full rounded-full border border-border px-8 py-3.5 text-center font-mono text-sm font-bold text-muted-foreground transition-all hover:border-primary/40 hover:text-foreground sm:w-auto"
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            asChild
+            className="w-full rounded-full px-8 font-mono sm:w-auto"
           >
-            Join the waitlist
-          </a>
+            <a href="#waitlist">Join the waitlist</a>
+          </Button>
         </div>
 
         <p className="font-mono text-xs text-muted-foreground/50">
@@ -72,8 +80,8 @@ export default function LandingPage() {
 
       {/* How it works */}
       <section className="border-y border-border bg-card px-6 py-20">
-        <div className="mx-auto max-w-3xl space-y-12">
-          <div className="space-y-2 text-center">
+        <div className="mx-auto flex max-w-3xl flex-col gap-12">
+          <div className="flex flex-col gap-2 text-center">
             <p className="font-mono text-xs tracking-widest text-primary uppercase">
               How it works
             </p>
@@ -99,7 +107,7 @@ export default function LandingPage() {
                 body: "After each session, your coach breaks down what went well and what to focus on next. Progress you can actually see.",
               },
             ].map((item) => (
-              <div key={item.step} className="space-y-3">
+              <div key={item.step} className="flex flex-col gap-3">
                 <p className="font-mono text-3xl font-bold text-primary/20">
                   {item.step}
                 </p>
@@ -117,8 +125,8 @@ export default function LandingPage() {
 
       {/* Who it's for */}
       <section className="px-6 py-20">
-        <div className="mx-auto max-w-3xl space-y-12">
-          <div className="space-y-2 text-center">
+        <div className="mx-auto flex max-w-3xl flex-col gap-12">
+          <div className="flex flex-col gap-2 text-center">
             <p className="font-mono text-xs tracking-widest text-primary uppercase">
               Who it&apos;s for
             </p>
@@ -180,8 +188,8 @@ export default function LandingPage() {
         id="waitlist"
         className="border-t border-border bg-card px-6 py-20"
       >
-        <div className="mx-auto max-w-lg space-y-8 text-center">
-          <div className="space-y-3">
+        <div className="mx-auto flex max-w-lg flex-col gap-8 text-center">
+          <div className="flex flex-col gap-3">
             <p className="font-mono text-xs tracking-widest text-primary uppercase">
               Waitlist
             </p>
@@ -241,7 +249,7 @@ function WaitlistForm() {
 
   if (formState === "success") {
     return (
-      <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/5 px-6 py-8">
+      <div className="flex flex-col gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-6 py-8">
         <p className="text-2xl">🎉</p>
         <p className="font-mono font-bold text-foreground">
           You&apos;re on the list.
@@ -255,7 +263,7 @@ function WaitlistForm() {
 
   if (formState === "already") {
     return (
-      <div className="space-y-2 rounded-2xl border border-border bg-card px-6 py-8">
+      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card px-6 py-8">
         <p className="font-mono font-bold text-foreground">
           You&apos;re already on the list.
         </p>
@@ -267,27 +275,24 @@ function WaitlistForm() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex gap-2">
-        <input
+        <Input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           placeholder="your@email.com"
-          className="flex-1 rounded-full border border-border bg-background px-5 py-3 font-mono text-sm text-foreground transition-colors outline-none placeholder:text-muted-foreground/40 focus:border-primary"
+          className="flex-1 rounded-full px-5 py-3 font-mono text-sm"
         />
-        <button
+        <Button
           onClick={handleSubmit}
           disabled={formState === "loading" || !isValidEmail(email.trim())}
-          className={`shrink-0 rounded-full px-6 py-3 font-mono text-sm font-bold transition-all ${
-            formState === "loading" || !isValidEmail(email.trim())
-              ? "cursor-not-allowed bg-muted text-muted-foreground"
-              : "bg-primary text-primary-foreground hover:opacity-90"
-          }`}
+          size="lg"
+          className="shrink-0 rounded-full px-6 font-mono"
         >
           {formState === "loading" ? "..." : "Join →"}
-        </button>
+        </Button>
       </div>
       {formState === "error" && (
         <p className="text-center font-mono text-xs text-destructive">

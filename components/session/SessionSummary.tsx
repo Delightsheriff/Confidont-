@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react"
 import { generateFeedback } from "@/lib/ai/feedback"
 import { saveSession } from "@/lib/storage/session"
+import { Button } from "@/components/ui/button"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 import type { SessionResult } from "@/components/session/SessionAnalyzer"
 
 // ─────────────────────────────────────────────
@@ -99,7 +103,7 @@ export default function SessionSummary({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-6 text-foreground">
       {/* Header */}
-      <div className="space-y-1 text-center">
+      <div className="flex flex-col gap-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
         <p className="font-mono text-xs text-muted-foreground">
           Session complete
@@ -107,10 +111,10 @@ export default function SessionSummary({
       </div>
 
       {/* ── Feedback card ──────────────────────── */}
-      <div className="w-full max-w-2xl space-y-5 rounded-2xl border border-border bg-card p-6">
+      <div className="flex w-full max-w-2xl flex-col gap-5 rounded-2xl border border-border bg-card p-6">
         {feedbackState === "loading" ? (
           <div className="flex flex-col items-center gap-3 py-8">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="font-mono text-sm text-muted-foreground">
               {personaName} is putting together your feedback...
             </p>
@@ -118,7 +122,7 @@ export default function SessionSummary({
         ) : (
           <>
             {/* Persona message */}
-            <div className="space-y-1">
+            <div className="flex flex-col gap-1">
               <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
                 {personaName}
               </p>
@@ -127,7 +131,7 @@ export default function SessionSummary({
               </p>
             </div>
 
-            <div className="h-px bg-border" />
+            <Separator />
 
             {/* Highlight */}
             <div className="flex gap-3">
@@ -155,7 +159,7 @@ export default function SessionSummary({
               </div>
             </div>
 
-            <div className="h-px bg-border" />
+            <Separator />
 
             {/* Points earned */}
             {feedback?.pointsEarned != null && feedback.pointsEarned > 0 && (
@@ -231,12 +235,14 @@ export default function SessionSummary({
         <div className="flex items-center gap-3">
           {/* Save Progress */}
           {feedbackState === "ready" && (
-            <button
+            <Button
+              variant="outline"
               onClick={handleSave}
-              className="rounded-full border border-primary px-8 py-3 font-mono text-sm font-bold text-primary transition-all duration-200 hover:bg-primary hover:text-primary-foreground"
+              size="lg"
+              className="rounded-full px-8 font-mono"
             >
               Save Progress
-            </button>
+            </Button>
           )}
 
           {feedbackState === "saved" && (
@@ -246,12 +252,13 @@ export default function SessionSummary({
           )}
 
           {/* Start Again */}
-          <button
+          <Button
             onClick={onRestart}
-            className="rounded-full bg-primary px-8 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 hover:opacity-90"
+            size="lg"
+            className="rounded-full px-8 font-mono"
           >
             Start Again
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -278,18 +285,17 @@ function ScoreCard({
   status: "good" | "bad" | "neutral"
 }) {
   return (
-    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
+    <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3.5">
       <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
         {label}
       </p>
       <p
-        className={`font-mono text-lg font-bold ${
-          status === "good"
-            ? "text-primary"
-            : status === "bad"
-              ? "text-destructive"
-              : "text-muted-foreground"
-        }`}
+        className={cn(
+          "font-mono text-lg font-bold",
+          status === "good" && "text-primary",
+          status === "bad" && "text-destructive",
+          status === "neutral" && "text-muted-foreground"
+        )}
       >
         {value}
       </p>

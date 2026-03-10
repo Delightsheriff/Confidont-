@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from "react"
 import { PERSONAS } from "@/types/user"
 import { saveProfile } from "@/lib/storage/user"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import type {
   OnboardingAnswers,
   Pronoun,
@@ -81,20 +84,24 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
           <div
             key={i}
-            className={`rounded-full transition-all duration-300 ${
+            className={cn(
+              "rounded-full transition-all duration-300",
               i + 1 === step
                 ? "h-1.5 w-5 bg-primary"
                 : i + 1 < step
-                  ? "h-1.5 w-1.5 bg-primary/50"
-                  : "h-1.5 w-1.5 bg-border"
-            }`}
+                  ? "size-1.5 bg-primary/50"
+                  : "size-1.5 bg-border"
+            )}
           />
         ))}
       </div>
 
       {/* Step content */}
       <div
-        className={`w-full max-w-lg transition-all duration-350 ease-out ${stepStyles[stepState]}`}
+        className={cn(
+          "w-full max-w-lg transition-all duration-350 ease-out",
+          stepStyles[stepState]
+        )}
       >
         {step === 1 && (
           <StepName
@@ -142,15 +149,16 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
       {/* Back button — not on step 1 */}
       {step > 1 && stepState === "visible" && (
-        <button
+        <Button
+          variant="ghost"
           onClick={() => {
             setStepState("exiting")
             setTimeout(() => setStep((s) => s - 1), 350)
           }}
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 font-mono text-xs text-muted-foreground hover:text-foreground"
         >
           ← back
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -192,7 +200,7 @@ function StepName({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
         placeholder="Your name"
-        className="w-full border-b-2 border-border bg-transparent pb-2 font-mono text-2xl text-foreground transition-colors outline-none placeholder:text-muted-foreground/40 focus:border-primary"
+        className="w-full border-b-2 border-border bg-transparent pb-2 font-mono text-2xl text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary"
       />
       <ContinueButton onClick={submit} disabled={value.trim().length < 1} />
     </StepShell>
@@ -269,7 +277,7 @@ function StepGoal({
       heading="Why are you here?"
       subtext="Pick the one that fits best. You can always change this later."
     >
-      <div className="w-full space-y-2">
+      <div className="flex w-full flex-col gap-2">
         {options.map((o) => (
           <button
             key={o.value}
@@ -321,7 +329,7 @@ function StepCameraConfidence({
       heading={`How would you describe yourself on camera right now, ${name}?`}
       subtext="No judgment. This helps us start in the right place."
     >
-      <div className="w-full space-y-2">
+      <div className="flex w-full flex-col gap-2">
         {options.map((o) => (
           <button
             key={o.value}
@@ -385,7 +393,7 @@ function StepPersona({
       heading="Pick your coach."
       subtext="This is who'll be with you every session. You can change them later."
     >
-      <div className="w-full space-y-3">
+      <div className="flex w-full flex-col gap-3">
         {PERSONAS.map((p) => (
           <PersonaCard
             key={p.id}
@@ -422,7 +430,7 @@ function StepShell({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <p className="font-mono text-xs tracking-widest text-primary uppercase">
           {eyebrow}
         </p>
@@ -479,15 +487,19 @@ function PersonaCard({
   return (
     <button
       onClick={onSelect}
-      className={`flex w-full items-start gap-4 rounded-xl border px-4 py-4 text-left transition-all duration-150 ${
+      className={cn(
+        "flex w-full items-start gap-4 rounded-xl border px-4 py-4 text-left transition-all duration-150",
         selected
           ? "border-primary bg-primary/5"
           : "border-border hover:border-primary/40 hover:bg-primary/5"
-      }`}
+      )}
     >
       {/* Avatar placeholder */}
       <div
-        className={`h-10 w-10 rounded-full ${persona.colorAccent} flex shrink-0 items-center justify-center font-mono text-sm font-bold text-white`}
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold text-white",
+          persona.colorAccent
+        )}
       >
         {persona.name[0]}
       </div>
@@ -509,9 +521,10 @@ function PersonaCard({
 
       {/* Selection indicator */}
       <div
-        className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-all ${
+        className={cn(
+          "mt-1 size-4 shrink-0 rounded-full border-2 transition-all",
           selected ? "border-primary bg-primary" : "border-border"
-        }`}
+        )}
       />
     </button>
   )
@@ -527,16 +540,13 @@ function ContinueButton({
   label?: string
 }) {
   return (
-    <button
+    <Button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full rounded-full py-3.5 font-mono text-sm font-bold transition-all duration-200 ${
-        disabled
-          ? "cursor-not-allowed bg-muted text-muted-foreground"
-          : "bg-primary text-primary-foreground hover:opacity-90"
-      }`}
+      size="lg"
+      className="w-full rounded-full font-mono"
     >
       {label}
-    </button>
+    </Button>
   )
 }

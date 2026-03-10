@@ -301,7 +301,7 @@ export default function SessionAnalyzer({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-foreground">
       {/* Header */}
-      <div className="space-y-1 text-center">
+      <div className="flex flex-col gap-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
         <p className="font-mono text-xs text-muted-foreground">
           {sessionState === "loading-topics"
@@ -346,7 +346,7 @@ export default function SessionAnalyzer({
         {/* ── Loading topics state ── */}
         {sessionState === "loading-topics" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="font-mono text-sm text-muted-foreground">
               Preparing your session...
             </p>
@@ -381,7 +381,7 @@ export default function SessionAnalyzer({
 
             {/* Topic prompt — center */}
             <div className="absolute inset-0 flex items-center justify-center px-8">
-              <div className="space-y-2 text-center">
+              <div className="flex flex-col gap-2 text-center">
                 <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
                   Topic {topicIndex + 1} of {topics.length}
                 </p>
