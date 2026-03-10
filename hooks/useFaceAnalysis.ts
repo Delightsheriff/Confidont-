@@ -15,21 +15,21 @@ import { NUDGE_MESSAGES } from "@/lib/session-config"
 // useFaceAnalysis
 //
 // Core detection hook. Knows nothing about UI.
-// Accepts a config object — enable/disable metrics
-// without touching detection logic.
+// Config-driven — enable/disable metrics without
+// touching detection logic.
 //
-// Usage:
-//   const { frameMetrics, sessionScore, nudge, isReady } =
-//     useFaceAnalysis(videoRef, isSessionActive, config)
+// CRITICAL: The video element must stay in the DOM
+// and be rendered (not display:none) for MediaPipe
+// to receive valid frames.
+// Use: opacity-0 absolute pointer-events-none
+// instead of className="hidden"
 // ─────────────────────────────────────────────
 
-interface UseFaceAnalysisReturn {
+export interface UseFaceAnalysisReturn {
   frameMetrics: FrameMetrics | null
   sessionScore: SessionScore
   activeNudge: Nudge | null
-  isReady: boolean // landmarker loaded and ready
-  eyeContactFrames: number
-  totalFrames: number
+  isReady: boolean
 }
 
 const INITIAL_SCORE: SessionScore = {
@@ -41,6 +41,8 @@ const INITIAL_SCORE: SessionScore = {
   durationSeconds: 0,
 }
 
+type Landmark = { x: number; y: number; z: number }
+
 export function useFaceAnalysis(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   isSessionActive: boolean,
@@ -50,46 +52,50 @@ export function useFaceAnalysis(
   const [frameMetrics, setFrameMetrics] = useState<FrameMetrics | null>(null)
   const [sessionScore, setSessionScore] = useState<SessionScore>(INITIAL_SCORE)
   const [activeNudge, setActiveNudge] = useState<Nudge | null>(null)
-  const [eyeContactFrames, setEyeContactFrames] = useState(0)
-  const [totalFrames, setTotalFrames] = useState(0)
 
   const landmarkerRef = useRef<FaceLandmarker | null>(null)
   const requestRef = useRef<number | undefined>(undefined)
   const prevNoseRef = useRef<{ x: number; y: number } | null>(null)
-
-  // Score accumulators
   const eyeContactFramesRef = useRef(0)
   const composureFramesRef = useRef(0)
   const totalFramesRef = useRef(0)
   const sessionStartRef = useRef<number | null>(null)
-
-  // Nudge cooldown
   const lastNudgeTimeRef = useRef<number>(0)
   const positiveStreakStartRef = useRef<number | null>(null)
 
   // ── Load MediaPipe ──────────────────────────
   useEffect(() => {
+    let cancelled = false
     const setup = async () => {
-      const filesetResolver = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-      )
-      const faceLandmarker = await FaceLandmarker.createFromOptions(
-        filesetResolver,
-        {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            delegate: "GPU",
-          },
-          outputFaceBlendshapes: true,
-          runningMode: "VIDEO",
-          numFaces: 1,
+      try {
+        const filesetResolver = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        )
+        const faceLandmarker = await FaceLandmarker.createFromOptions(
+          filesetResolver,
+          {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+              delegate: "GPU",
+            },
+            outputFaceBlendshapes: true,
+            runningMode: "VIDEO",
+            numFaces: 1,
+          }
+        )
+        if (!cancelled) {
+          landmarkerRef.current = faceLandmarker
+          setIsReady(true)
         }
-      )
-      landmarkerRef.current = faceLandmarker
-      setIsReady(true)
+      } catch (err) {
+        console.error("MediaPipe setup failed:", err)
+      }
     }
     setup()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // ── Nudge dispatcher ────────────────────────
@@ -98,27 +104,23 @@ export function useFaceAnalysis(
       const now = performance.now()
       if (now - lastNudgeTimeRef.current < config.thresholds.nudge.cooldownMs)
         return
-
       const messages = NUDGE_MESSAGES[type]
       const message = messages[Math.floor(Math.random() * messages.length)]
-
       lastNudgeTimeRef.current = now
       setActiveNudge({ type, message, timestamp: now })
-
-      // Auto-dismiss after 5s
       setTimeout(() => setActiveNudge(null), 5000)
     },
     [config.thresholds.nudge.cooldownMs]
   )
 
-  // ── Per-frame metric processor ──────────────
+  // ── Per-frame processor ──────────────────────
   const processFrame = useCallback(
-    (landmarks: { x: number; y: number; z: number }[]) => {
+    (landmarks: Landmark[]) => {
       const { metrics, thresholds } = config
       const now = performance.now()
       totalFramesRef.current++
 
-      const result: Partial<FrameMetrics> = {
+      const result: FrameMetrics = {
         eyeContact: null,
         composure: null,
         headPose: null,
@@ -134,14 +136,11 @@ export function useFaceAnalysis(
 
       // ── Eye Contact ──────────────────────────
       if (metrics.eyeContact) {
-        const getGaze = (
-          iris: { x: number; y: number; z: number },
-          inner: { x: number; y: number; z: number },
-          outer: { x: number; y: number; z: number }
-        ) => (iris.x - inner.x) / (outer.x - inner.x)
+        const getHGaze = (iris: Landmark, inner: Landmark, outer: Landmark) =>
+          (iris.x - inner.x) / (outer.x - inner.x)
 
-        const leftGaze = getGaze(landmarks[468], landmarks[33], landmarks[133])
-        const rightGaze = getGaze(
+        const leftGaze = getHGaze(landmarks[468], landmarks[33], landmarks[133])
+        const rightGaze = getHGaze(
           landmarks[473],
           landmarks[362],
           landmarks[263]
@@ -163,21 +162,16 @@ export function useFaceAnalysis(
 
         if (result.eyeContact) {
           eyeContactFramesRef.current++
-          if (!positiveStreakStartRef.current) {
+          if (!positiveStreakStartRef.current)
+            positiveStreakStartRef.current = now
+          const streakSeconds = (now - positiveStreakStartRef.current) / 1000
+          if (streakSeconds >= thresholds.nudge.positiveStreakSeconds) {
+            fireNudge("positive-streak")
             positiveStreakStartRef.current = now
           }
         } else {
           positiveStreakStartRef.current = null
           fireNudge("eye-contact-lost")
-        }
-
-        // Positive streak nudge
-        if (positiveStreakStartRef.current) {
-          const streakMs = (now - positiveStreakStartRef.current) / 1000
-          if (streakMs >= config.thresholds.nudge.positiveStreakSeconds) {
-            fireNudge("positive-streak")
-            positiveStreakStartRef.current = now // reset streak timer
-          }
         }
       }
 
@@ -191,9 +185,8 @@ export function useFaceAnalysis(
               Math.pow(nose.y - prevNoseRef.current.y, 2)
           )
         }
-        prevNoseRef.current = nose
+        prevNoseRef.current = { x: nose.x, y: nose.y }
         result.composure = movement < thresholds.composure.maxMovement
-
         if (result.composure) {
           composureFramesRef.current++
         } else {
@@ -202,84 +195,74 @@ export function useFaceAnalysis(
       }
 
       // ── Head Pose ────────────────────────────
-      // Heuristic using nose tip vs face center landmarks
-      // Full euler angles require 3D projection — simplified here
+      // Simplified heuristic — nose tip relative to face center
+      // Full euler angles require 3D projection (future improvement)
       if (metrics.headPose) {
         const noseTip = landmarks[4]
-        const faceCenter = landmarks[168] // mid nose bridge
-
-        const yawDelta = (noseTip.x - faceCenter.x) * 100
-        const pitchDelta = (noseTip.y - faceCenter.y) * 100
-        const rollDelta = (landmarks[454].y - landmarks[234].y) * 100
-
-        result.headPose = {
-          pitch: pitchDelta,
-          yaw: yawDelta,
-          roll: rollDelta,
-        }
-
+        const faceCenter = landmarks[168]
+        const yaw = (noseTip.x - faceCenter.x) * 100
+        const pitch = (noseTip.y - faceCenter.y) * 100
+        const roll = (landmarks[454].y - landmarks[234].y) * 100
+        result.headPose = { pitch, yaw, roll }
         if (
-          Math.abs(yawDelta) > thresholds.headPose.maxYaw ||
-          Math.abs(pitchDelta) > thresholds.headPose.maxPitch
+          Math.abs(yaw) > thresholds.headPose.maxYaw ||
+          Math.abs(pitch) > thresholds.headPose.maxPitch
         ) {
           fireNudge("head-tilted")
         }
       }
 
       // ── Blink Rate ───────────────────────────
-      // Disabled by default — needs rolling window accumulator
-      // if (metrics.blinkRate) { ... }
+      // Scaffolded — uses eye aspect ratio (EAR)
+      // Needs rolling 60s window accumulator before enabling
+      // if (metrics.blinkRate) {
+      //   const topLid    = landmarks[159]
+      //   const bottomLid = landmarks[145]
+      //   const EAR = Math.abs(topLid.y - bottomLid.y)
+      //   // EAR < 0.02 = blink detected, accumulate in rolling window
+      // }
 
       // ── Mouth Movement ───────────────────────
-      // Rough openness ratio for future pace detection
+      // Openness ratio 0-1 — foundation for pace detection
       if (metrics.mouthMovement) {
         const upperLip = landmarks[13]
         const lowerLip = landmarks[14]
-        const mouthOpen = Math.abs(lowerLip.y - upperLip.y)
-        result.mouthMovement = Math.min(mouthOpen * 10, 1)
+        result.mouthMovement = Math.min(
+          Math.abs(lowerLip.y - upperLip.y) * 10,
+          1
+        )
       }
 
       // ── Camera Angle ─────────────────────────
-      // Face vertical center should be roughly in middle third of frame
       if (metrics.cameraAngle) {
-        const noseTip = landmarks[4]
-        if (noseTip.y < 0.25) {
-          result.cameraAngle = "too-high"
-        } else if (noseTip.y > 0.75) {
-          result.cameraAngle = "too-low"
-        } else {
-          result.cameraAngle = "eye-level"
-        }
+        const noseY = landmarks[4].y
+        result.cameraAngle =
+          noseY < 0.25 ? "too-high" : noseY > 0.75 ? "too-low" : "eye-level"
       }
 
       // ── Lighting Quality ─────────────────────
-      // Heuristic: face landmark detection confidence correlates with lighting
-      // Low z-variance on key landmarks = flat, well-lit face
+      // Z-range of key landmarks as rough depth/lighting proxy
       if (metrics.lightingQuality) {
-        const keyPoints = [
+        const zValues = [
           landmarks[1],
           landmarks[33],
           landmarks[263],
           landmarks[4],
-        ]
-        const zValues = keyPoints.map((p) => p.z)
+        ].map((p) => p.z)
         const zRange = Math.max(...zValues) - Math.min(...zValues)
-
-        // Very rough heuristic — refine with real data
-        if (zRange > 0.15) {
-          result.lightingQuality = "harsh"
-          fireNudge("dim-lighting")
-        } else {
-          result.lightingQuality = "good"
-        }
+        result.lightingQuality = zRange > 0.15 ? "harsh" : "good"
+        if (result.lightingQuality === "harsh") fireNudge("dim-lighting")
       }
 
       // ── Background Clutter ───────────────────
-      // Future: use face detection confidence as proxy
-      // High confidence = clear background
+      // Future: face detection confidence as proxy
       // if (metrics.backgroundClutter) { ... }
 
-      // ── Update scores ────────────────────────
+      // ── Noisy Environment ────────────────────
+      // Future: audio noise floor via AnalyserNode (Web Audio API)
+      // if (metrics.noisyEnvironment) { ... }
+
+      // ── Update cumulative scores ─────────────
       const elapsed = sessionStartRef.current
         ? (now - sessionStartRef.current) / 1000
         : 0
@@ -297,15 +280,13 @@ export function useFaceAnalysis(
                 (composureFramesRef.current / totalFramesRef.current) * 100
               )
             : 0,
-        fillerWordCount: 0, // managed by useAudioAnalysis hook
-        speechPaceAvg: null,
+        fillerWordCount: 0, // managed by useAudioAnalysis
+        speechPaceAvg: null, // managed by useAudioAnalysis
         totalPoints: 0, // calculated at session end
         durationSeconds: Math.round(elapsed),
       })
 
-      setFrameMetrics(result as FrameMetrics)
-      setEyeContactFrames(eyeContactFramesRef.current)
-      setTotalFrames(totalFramesRef.current)
+      setFrameMetrics(result)
     },
     [config, fireNudge]
   )
@@ -314,44 +295,39 @@ export function useFaceAnalysis(
   useEffect(() => {
     if (!landmarkerRef.current || !isSessionActive || !videoRef.current) return
 
-    if (isSessionActive) {
-      sessionStartRef.current = performance.now()
-      eyeContactFramesRef.current = 0
-      composureFramesRef.current = 0
-      totalFramesRef.current = 0
-    }
+    // Reset accumulators
+    sessionStartRef.current = performance.now()
+    eyeContactFramesRef.current = 0
+    composureFramesRef.current = 0
+    totalFramesRef.current = 0
+    prevNoseRef.current = null
+    positiveStreakStartRef.current = null
 
     const predict = () => {
-      if (!videoRef.current || videoRef.current.readyState < 2) {
+      const video = videoRef.current
+      // Video must be in DOM and playing — not display:none
+      if (!video || video.readyState < 2) {
         requestRef.current = requestAnimationFrame(predict)
         return
       }
-
       const results = landmarkerRef.current!.detectForVideo(
-        videoRef.current,
+        video,
         performance.now()
       )
-
-      if (results.faceLandmarks?.length > 0) {
+      if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         processFrame(results.faceLandmarks[0])
       }
-
       requestRef.current = requestAnimationFrame(predict)
     }
 
     requestRef.current = requestAnimationFrame(predict)
-
     return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current)
+      if (requestRef.current !== undefined) {
+        cancelAnimationFrame(requestRef.current)
+        requestRef.current = undefined
+      }
     }
   }, [isSessionActive, processFrame, videoRef])
 
-  return {
-    frameMetrics,
-    sessionScore,
-    activeNudge,
-    isReady,
-    eyeContactFrames,
-    totalFrames,
-  }
+  return { frameMetrics, sessionScore, activeNudge, isReady }
 }

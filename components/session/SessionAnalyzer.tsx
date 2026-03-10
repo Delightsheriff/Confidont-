@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useCallback } from "react"
+import { useRef, useState, useCallback, useEffect } from "react"
 import { useFaceAnalysis } from "@/hooks/useFaceAnalysis"
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis"
 import { DEFAULT_CONFIG } from "@/lib/session-config"
@@ -9,81 +9,167 @@ import type { Nudge } from "@/types/session"
 // ─────────────────────────────────────────────
 // SessionAnalyzer
 //
-// UI layer — wires both hooks together.
-// Shows live metrics on screen (not console).
-// Camera feed is HIDDEN from user by design.
+// UI layer — wires useFaceAnalysis + useAudioAnalysis.
+//
+// Layout:
+// - One large session box
+// - Video feed rendered in DOM but invisible (opacity-0)
+//   so MediaPipe receives valid frames
+// - Debug toggle (dev only) reveals video feed
+// - Real audio waveform via Web Audio API AnalyserNode
+// - Nudge banner floats above waveform
+// - Metrics grid below the box
 // ─────────────────────────────────────────────
+
+const isDev = process.env.NODE_ENV === "development"
 
 export default function SessionAnalyzer() {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const waveAnimRef = useRef<number | undefined>(undefined)
+
   const [isSessionActive, setIsSessionActive] = useState(false)
   const [isCameraReady, setIsCameraReady] = useState(false)
-  const [nudgeQueue, setNudgeQueue] = useState<Nudge[]>([])
+  const [showDebugFeed, setShowDebugFeed] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // Override config per phase/user — for now use defaults
   const config = DEFAULT_CONFIG
-
-  // Nudge handlers passed to audio hook
-  const handleFillerDetected = useCallback((word: string) => {
-    console.debug("Filler word detected:", word)
-  }, [])
-
-  const handleLongSilence = useCallback(() => {
-    // Audio hook fires this — face hook handles nudge dispatch
-  }, [])
+  const isActive = isSessionActive && isCameraReady
 
   const { frameMetrics, sessionScore, activeNudge, isReady } = useFaceAnalysis(
     videoRef,
-    isSessionActive && isCameraReady,
+    isActive,
     config
   )
 
   const { fillerWordCount, detectedFillers, silenceDuration, isListening } =
-    useAudioAnalysis(
-      isSessionActive,
-      config,
-      handleFillerDetected,
-      handleLongSilence
-    )
+    useAudioAnalysis(isSessionActive, config)
 
   // ── Session control ──────────────────────────
   const toggleSession = async () => {
     if (isSessionActive) {
       setIsSessionActive(false)
       setIsCameraReady(false)
+      stopWaveform()
 
       if (videoRef.current?.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream
         stream.getTracks().forEach((t) => t.stop())
         videoRef.current.srcObject = null
       }
+      analyserRef.current = null
     } else {
+      setCameraError(null)
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
+          video: { width: 1280, height: 720, facingMode: "user" },
           audio: true,
         })
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           videoRef.current.onloadeddata = () => {
             setIsCameraReady(true)
             setIsSessionActive(true)
+            setupWaveform(stream)
           }
         }
       } catch (err) {
-        console.error("Camera/mic access denied", err)
+        const isNotFound =
+          err instanceof DOMException && err.name === "NotFoundError"
+        const isDenied =
+          err instanceof DOMException && err.name === "NotAllowedError"
+        setCameraError(
+          isNotFound
+            ? "No camera or microphone found. Please connect a device and try again."
+            : isDenied
+              ? "Camera/mic access was denied. Please allow access in your browser settings."
+              : `Could not access camera: ${err instanceof Error ? err.message : "Unknown error"}`
+        )
+        console.error("Camera/mic error:", err)
       }
     }
   }
 
-  const isActive = isSessionActive && isCameraReady
+  // ── Real audio waveform via Web Audio API ────
+  const setupWaveform = useCallback((stream: MediaStream) => {
+    try {
+      const audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 128
+      source.connect(analyser)
+      analyserRef.current = analyser
+      drawWaveform()
+    } catch (err) {
+      console.warn("Web Audio API unavailable:", err)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const drawWaveform = useCallback(() => {
+    const canvas = canvasRef.current
+    const analyser = analyserRef.current
+    if (!canvas || !analyser) return
+
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const draw = () => {
+      waveAnimRef.current = requestAnimationFrame(draw)
+      analyser.getByteFrequencyData(dataArray)
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const barWidth = (canvas.width / bufferLength) * 1.5
+      let x = 0
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height * 0.9
+        // Use CSS variable colour — teal primary
+        ctx.fillStyle = `rgba(81, 150, 150, ${0.4 + (dataArray[i] / 255) * 0.6})`
+        ctx.beginPath()
+        ctx.roundRect(
+          x,
+          (canvas.height - barHeight) / 2,
+          barWidth - 1,
+          barHeight,
+          2
+        )
+        ctx.fill()
+        x += barWidth + 1
+      }
+    }
+
+    draw()
+  }, [])
+
+  const stopWaveform = useCallback(() => {
+    if (waveAnimRef.current !== undefined) {
+      cancelAnimationFrame(waveAnimRef.current)
+      waveAnimRef.current = undefined
+    }
+    const canvas = canvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext("2d")
+      ctx?.clearRect(0, 0, canvas.width, canvas.height)
+    }
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => stopWaveform()
+  }, [stopWaveform])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-6 text-foreground">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-foreground">
       {/* Header */}
       <div className="space-y-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="font-mono text-xs text-muted-foreground">
           {!isReady
             ? "Loading AI model..."
             : isActive
@@ -92,30 +178,105 @@ export default function SessionAnalyzer() {
         </p>
       </div>
 
-      {/* Camera — HIDDEN from user, used only for analysis */}
-      <video ref={videoRef} autoPlay playsInline muted className="hidden" />
+      {/* ── Main Session Box ───────────────────── */}
+      <div
+        className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card"
+        style={{ aspectRatio: "16/9" }}
+      >
+        {/* Video element — ALWAYS in DOM for MediaPipe
+            opacity-0 hides it visually without removing it from layout */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`absolute inset-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-300 ${
+            showDebugFeed ? "opacity-100" : "opacity-0"
+          }`}
+        />
 
-      {/* Session visual — what user sees instead of their face */}
-      <div className="relative flex aspect-video w-full max-w-xl items-center justify-center overflow-hidden rounded-2xl border border-border bg-card">
-        {isActive ? (
-          <SessionVisual
-            eyeContact={frameMetrics?.eyeContact ?? null}
-            silenceDuration={silenceDuration}
-            isListening={isListening}
-          />
-        ) : (
-          <div className="text-sm text-muted-foreground">
-            {isReady ? "Press Start Session to begin" : "Loading..."}
+        {/* Gradient overlay — always shown, dims debug feed nicely too */}
+        <div className="absolute inset-0 bg-linear-to-t from-card via-card/60 to-transparent" />
+
+        {/* Center content — idle state */}
+        {!isActive && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="font-mono text-sm text-muted-foreground">
+              {isReady ? "Press Start Session to begin" : "Initialising AI..."}
+            </p>
           </div>
         )}
 
-        {/* Active nudge overlay */}
+        {/* Eye contact indicator — top left */}
+        {isActive && (
+          <div className="absolute top-4 left-4 flex items-center gap-2">
+            <span
+              className={`h-2 w-2 rounded-full transition-colors ${
+                frameMetrics?.eyeContact ? "bg-primary" : "bg-muted-foreground"
+              }`}
+            />
+            <span className="font-mono text-xs text-muted-foreground">
+              {frameMetrics?.eyeContact ? "Eye contact" : "Look at camera"}
+            </span>
+          </div>
+        )}
+
+        {/* Duration — top right */}
+        {isActive && (
+          <div className="absolute top-4 right-4 font-mono text-xs text-muted-foreground">
+            {formatDuration(sessionScore.durationSeconds)}
+          </div>
+        )}
+
+        {/* Nudge banner — floats above waveform */}
         {activeNudge && <NudgeBanner nudge={activeNudge} />}
+
+        {/* Waveform — bottom of box */}
+        <div className="absolute right-0 bottom-0 left-0 flex h-16 items-end px-4 pb-3">
+          {isActive ? (
+            <canvas
+              ref={canvasRef}
+              width={600}
+              height={48}
+              className="h-12 w-full"
+            />
+          ) : (
+            // Static idle waveform
+            <div className="flex h-8 w-full items-center gap-px">
+              {Array.from({ length: 60 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-full bg-border"
+                  style={{
+                    height: `${Math.round(10 + Math.sin(i * 0.4) * 6)}%`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Debug toggle — dev only */}
+        {isDev && (
+          <button
+            onClick={() => setShowDebugFeed((p) => !p)}
+            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+          >
+            {showDebugFeed ? "hide feed" : "debug feed"}
+          </button>
+        )}
       </div>
 
-      {/* Live Metrics Panel */}
+      {/* Error state */}
+      {cameraError && (
+        <p className="max-w-sm text-center font-mono text-xs text-destructive">
+          {cameraError}
+        </p>
+      )}
+
+      {/* ── Metrics Grid ───────────────────────── */}
       {isActive && (
-        <div className="grid w-full max-w-xl grid-cols-2 gap-3">
+        <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
           <MetricCard
             label="Eye Contact"
             value={`${sessionScore.eyeContactPercent}%`}
@@ -126,13 +287,8 @@ export default function SessionAnalyzer() {
                   ? "bad"
                   : "neutral"
             }
-            detail={
-              frameMetrics?.eyeContact
-                ? "Looking at camera"
-                : "Look at the camera"
-            }
+            detail={frameMetrics?.eyeContact ? "On camera" : "Look at the lens"}
           />
-
           <MetricCard
             label="Composure"
             value={`${sessionScore.composurePercent}%`}
@@ -143,9 +299,8 @@ export default function SessionAnalyzer() {
                   ? "bad"
                   : "neutral"
             }
-            detail={frameMetrics?.composure ? "Steady" : "Try to stay still"}
+            detail={frameMetrics?.composure ? "Steady" : "Stay still"}
           />
-
           <MetricCard
             label="Filler Words"
             value={String(fillerWordCount)}
@@ -158,14 +313,21 @@ export default function SessionAnalyzer() {
             }
             detail={
               detectedFillers.length > 0
-                ? `Detected: "${detectedFillers.join('", "')}"`
-                : "None detected yet"
+                ? `"${detectedFillers[0]}" detected`
+                : "None detected"
             }
           />
-
           <MetricCard
             label="Head Position"
-            value={frameMetrics?.cameraAngle ?? "—"}
+            value={
+              frameMetrics?.cameraAngle === "eye-level"
+                ? "Good"
+                : frameMetrics?.cameraAngle === "too-high"
+                  ? "Too high"
+                  : frameMetrics?.cameraAngle === "too-low"
+                    ? "Too low"
+                    : "—"
+            }
             status={
               frameMetrics?.cameraAngle === "eye-level"
                 ? "good"
@@ -178,13 +340,18 @@ export default function SessionAnalyzer() {
                 ? "Lower your camera"
                 : frameMetrics?.cameraAngle === "too-low"
                   ? "Raise your camera"
-                  : "Good angle"
+                  : "Camera angle looks good"
             }
           />
-
           <MetricCard
             label="Lighting"
-            value={frameMetrics?.lightingQuality ?? "—"}
+            value={
+              frameMetrics?.lightingQuality === "good"
+                ? "Good"
+                : frameMetrics?.lightingQuality === "harsh"
+                  ? "Harsh"
+                  : "—"
+            }
             status={
               frameMetrics?.lightingQuality === "good"
                 ? "good"
@@ -195,24 +362,27 @@ export default function SessionAnalyzer() {
             detail={
               frameMetrics?.lightingQuality === "harsh"
                 ? "Face a light source"
-                : "Lighting looks good"
+                : "Lighting is good"
             }
           />
-
           <MetricCard
-            label="Duration"
-            value={`${sessionScore.durationSeconds}s`}
-            status="neutral"
-            detail={isListening ? "Mic active" : "Mic not detected"}
+            label="Microphone"
+            value={isListening ? "Active" : "—"}
+            status={isListening ? "good" : "neutral"}
+            detail={
+              silenceDuration > 3
+                ? `${Math.round(silenceDuration)}s of silence`
+                : "Listening"
+            }
           />
         </div>
       )}
 
-      {/* Start / End button */}
+      {/* ── Start / End button ─────────────────── */}
       <button
         onClick={toggleSession}
         disabled={!isReady}
-        className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all ${
+        className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
           !isReady
             ? "cursor-not-allowed bg-muted text-muted-foreground"
             : isActive
@@ -231,61 +401,23 @@ export default function SessionAnalyzer() {
 }
 
 // ─────────────────────────────────────────────
-// Sub-components
+// Helpers & sub-components
 // ─────────────────────────────────────────────
 
-function SessionVisual({
-  eyeContact,
-  silenceDuration,
-  isListening,
-}: {
-  eyeContact: boolean | null
-  silenceDuration: number
-  isListening: boolean
-}) {
-  return (
-    <div className="flex w-full flex-col items-center gap-4 px-8">
-      {/* Waveform placeholder */}
-      <div className="flex h-12 items-center gap-1">
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={i}
-            className="w-1 rounded-full bg-primary transition-all duration-150"
-            style={{
-              height: isListening ? `${Math.random() * 100}%` : "20%",
-              opacity: isListening ? 0.7 + Math.random() * 0.3 : 0.3,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Recording indicator */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span
-          className={`h-2 w-2 rounded-full ${
-            eyeContact ? "bg-primary" : "bg-muted"
-          }`}
-        />
-        {eyeContact ? "Camera detected" : "Look at the camera"}
-      </div>
-
-      {silenceDuration > 3 && (
-        <p className="animate-pulse text-xs text-muted-foreground">
-          Take your time — continue when ready
-        </p>
-      )}
-    </div>
-  )
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
 }
 
 function NudgeBanner({ nudge }: { nudge: Nudge }) {
   const isPositive = nudge.type === "positive-streak"
   return (
     <div
-      className={`absolute right-4 bottom-4 left-4 rounded-xl px-4 py-3 text-center font-mono text-sm transition-all ${
+      className={`absolute right-4 bottom-20 left-4 animate-in rounded-xl px-4 py-2.5 text-center font-mono text-sm backdrop-blur-sm transition-all duration-300 fade-in slide-in-from-bottom-2 ${
         isPositive
           ? "border border-primary/30 bg-primary/20 text-primary"
-          : "border border-border bg-card/90 text-foreground"
+          : "border border-border bg-card/80 text-foreground"
       }`}
     >
       {nudge.message}
@@ -304,21 +436,25 @@ function MetricCard({
   status: "good" | "bad" | "neutral"
   detail: string
 }) {
-  const statusColor = {
-    good: "text-primary",
-    bad: "text-destructive",
-    neutral: "text-muted-foreground",
-  }
-
   return (
-    <div className="space-y-1 rounded-xl border border-border bg-card p-4">
-      <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
+    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
+      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
         {label}
       </p>
-      <p className={`font-mono text-xl font-bold ${statusColor[status]}`}>
+      <p
+        className={`font-mono text-lg font-bold ${
+          status === "good"
+            ? "text-primary"
+            : status === "bad"
+              ? "text-destructive"
+              : "text-muted-foreground"
+        }`}
+      >
         {value}
       </p>
-      <p className="text-xs text-muted-foreground">{detail}</p>
+      <p className="text-[11px] leading-tight text-muted-foreground">
+        {detail}
+      </p>
     </div>
   )
 }

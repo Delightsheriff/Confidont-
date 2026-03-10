@@ -7,19 +7,18 @@ import type { FaceAnalysisConfig } from "@/types/session"
 // ─────────────────────────────────────────────
 // useAudioAnalysis
 //
-// Handles all audio-based metrics:
-// - Filler word detection (Web Speech API)
+// All audio-based metrics via Web Speech API:
+// - Filler word detection
 // - Silence duration tracking
-// - Speech pace (WPM) — scaffolded, needs calibration
+// - Speech pace (WPM) — scaffolded
 //
-// Separate from useFaceAnalysis to keep concerns clean.
-// Both hooks run in parallel during a session.
+// Runs in parallel with useFaceAnalysis.
 // ─────────────────────────────────────────────
 
-interface UseAudioAnalysisReturn {
+export interface UseAudioAnalysisReturn {
   fillerWordCount: number
-  detectedFillers: string[] // last detected filler words
-  silenceDuration: number // current silence in seconds
+  detectedFillers: string[]
+  silenceDuration: number
   speechPaceWPM: number | null
   isListening: boolean
 }
@@ -37,46 +36,66 @@ export function useAudioAnalysis(
   const [isListening, setIsListening] = useState(false)
 
   const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const silencePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const silenceStartRef = useRef<number | null>(null)
   const wordCountRef = useRef(0)
   const sessionStartRef = useRef<number | null>(null)
+  const isActiveRef = useRef(false)
 
-  const resetSilenceTimer = useCallback(() => {
+  const clearSilenceTracking = useCallback(() => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+    if (silencePollRef.current) clearInterval(silencePollRef.current)
     silenceStartRef.current = null
     setSilenceDuration(0)
+  }, [])
+
+  const startSilenceTimer = useCallback(() => {
+    clearSilenceTracking()
 
     silenceTimerRef.current = setTimeout(() => {
       silenceStartRef.current = Date.now()
 
-      // Poll silence duration every second
-      const poll = setInterval(() => {
-        if (!silenceStartRef.current) {
-          clearInterval(poll)
-          return
+      silencePollRef.current = setInterval(() => {
+        if (!silenceStartRef.current) return
+        const seconds = (Date.now() - silenceStartRef.current) / 1000
+        setSilenceDuration(seconds)
+        if (seconds >= config.thresholds.silence.maxSeconds) {
+          onLongSilence?.()
         }
-        const duration = (Date.now() - silenceStartRef.current) / 1000
-        setSilenceDuration(duration)
-
-        if (duration >= config.thresholds.silence.maxSeconds && onLongSilence) {
-          onLongSilence()
-        }
-      }, 1000)
-    }, 2000) // start silence timer after 2s of no speech
-  }, [config.thresholds.silence.maxSeconds, onLongSilence])
+      }, 500)
+    }, 1500)
+  }, [
+    clearSilenceTracking,
+    config.thresholds.silence.maxSeconds,
+    onLongSilence,
+  ])
 
   useEffect(() => {
     if (!isSessionActive) {
+      isActiveRef.current = false
       recognitionRef.current?.stop()
+      clearSilenceTracking()
       setIsListening(false)
       return
     }
 
-    if (!config.metrics.fillerWords && !config.metrics.silenceDuration) return
+    const needsAudio =
+      config.metrics.fillerWords ||
+      config.metrics.silenceDuration ||
+      config.metrics.speechPace
 
+    if (!needsAudio) return
+
+    // Browser API type safety
     const SpeechRecognitionAPI =
-      window.SpeechRecognition || window.webkitSpeechRecognition
+      (window as Window & typeof globalThis).SpeechRecognition ||
+      (
+        window as Window &
+          typeof globalThis & {
+            webkitSpeechRecognition?: typeof SpeechRecognition
+          }
+      ).webkitSpeechRecognition
 
     if (!SpeechRecognitionAPI) {
       console.warn("Web Speech API not supported in this browser")
@@ -87,83 +106,82 @@ export function useAudioAnalysis(
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = "en-US"
-
-    sessionStartRef.current = Date.now()
     recognitionRef.current = recognition
+    isActiveRef.current = true
+    sessionStartRef.current = Date.now()
 
     recognition.onstart = () => {
       setIsListening(true)
-      resetSilenceTimer()
+      startSilenceTimer()
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      resetSilenceTimer()
+      startSilenceTimer() // reset on any speech
 
       const results = Array.from(event.results)
-      const latestResult = results[results.length - 1]
-      const transcript = latestResult[0].transcript.toLowerCase().trim()
+      const latest = results[results.length - 1]
+      const transcript = latest[0].transcript.toLowerCase().trim()
 
       // Filler word detection
       if (config.metrics.fillerWords) {
-        const foundFillers = FILLER_WORDS.filter((filler) =>
-          transcript.includes(filler)
-        )
-
-        if (foundFillers.length > 0) {
-          setFillerWordCount((prev) => prev + foundFillers.length)
-          setDetectedFillers(foundFillers)
-          foundFillers.forEach((filler) => onFillerDetected?.(filler))
-
-          // Clear detected fillers after 2s
-          setTimeout(() => setDetectedFillers([]), 2000)
+        const found = FILLER_WORDS.filter((f) => transcript.includes(f))
+        if (found.length > 0) {
+          setFillerWordCount((prev) => prev + found.length)
+          setDetectedFillers(found)
+          found.forEach((f) => onFillerDetected?.(f))
+          setTimeout(() => setDetectedFillers([]), 2500)
         }
       }
 
-      // Word count for pace (only on final results)
-      if (config.metrics.speechPace && latestResult.isFinal) {
-        const words = transcript.split(" ").filter(Boolean).length
+      // Speech pace — only on final results to avoid double counting
+      if (config.metrics.speechPace && latest.isFinal) {
+        const words = transcript.split(/\s+/).filter(Boolean).length
         wordCountRef.current += words
-
-        const elapsedMinutes = sessionStartRef.current
+        const elapsedMin = sessionStartRef.current
           ? (Date.now() - sessionStartRef.current) / 60000
           : 1
-
-        if (elapsedMinutes > 0.1) {
-          setSpeechPaceWPM(Math.round(wordCountRef.current / elapsedMinutes))
+        if (elapsedMin > 0.1) {
+          setSpeechPaceWPM(Math.round(wordCountRef.current / elapsedMin))
         }
       }
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // network errors are common — just restart quietly
-      if (event.error === "network") return
+      // network errors are common and recoverable — ignore silently
+      if (event.error === "network" || event.error === "no-speech") return
       console.warn("Speech recognition error:", event.error)
     }
 
     recognition.onend = () => {
-      // Auto-restart if session still active
-      if (isSessionActive) {
+      // Auto-restart while session is active
+      if (isActiveRef.current) {
         try {
           recognition.start()
         } catch {
-          // already started
+          /* already starting */
         }
       } else {
         setIsListening(false)
       }
     }
 
-    recognition.start()
+    try {
+      recognition.start()
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err)
+    }
 
     return () => {
+      isActiveRef.current = false
       recognition.stop()
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      clearSilenceTracking()
       setIsListening(false)
     }
   }, [
     isSessionActive,
     config,
-    resetSilenceTimer,
+    startSilenceTimer,
+    clearSilenceTracking,
     onFillerDetected,
     onLongSilence,
   ])
