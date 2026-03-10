@@ -13,6 +13,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 
+const WAVEFORM_HEIGHTS = Array.from({ length: 60 }, (_, i) =>
+  Math.round((10 + Math.sin(i * 0.4) * 6) * 100) / 100
+)
+
 // ─────────────────────────────────────────────
 // SessionAnalyzer
 //
@@ -424,11 +428,11 @@ export default function SessionAnalyzer({
             />
           ) : (
             <div className="flex h-8 w-full items-center gap-px">
-              {Array.from({ length: 60 }).map((_, i) => (
+              {WAVEFORM_HEIGHTS.map((height, i) => (
                 <div
                   key={i}
                   className="flex-1 rounded-full bg-border"
-                  style={{ height: `${10 + Math.sin(i * 0.4) * 6}%` }}
+                  style={{ height: `${height}%` }}
                 />
               ))}
             </div>
