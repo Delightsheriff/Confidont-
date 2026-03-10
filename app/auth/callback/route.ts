@@ -1,15 +1,12 @@
 // ─────────────────────────────────────────────
 // app/auth/callback/route.ts
 //
-// Handles the OAuth redirect from Google.
-// Exchanges the code for a session, then redirects:
-// - New user (no profile) → /onboarding
-// - Returning user → /home
+// Handles OAuth + magic link redirects.
+// Uses server client — cookies() is async in Next.js 15+.
+// Uses getClaims() not getSession() per Supabase SSR docs.
 // ─────────────────────────────────────────────
-
 import { NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -17,45 +14,39 @@ export async function GET(request: Request) {
   const next = searchParams.get("next") ?? "/home"
 
   if (!code) {
+    console.error("[auth/callback] Missing code param")
     return NextResponse.redirect(`${origin}/auth/error`)
   }
 
-  const cookieStore = await cookies()
+  const supabase = await createClient()
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
 
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (error || !session) {
+  if (error) {
+    console.error(
+      "[auth/callback] exchangeCodeForSession error:",
+      error.message
+    )
     return NextResponse.redirect(`${origin}/auth/error`)
   }
 
-  // Check if this user has a profile already
+  // Validate session with getClaims (not getSession)
+  const { data, error: claimsError } = await supabase.auth.getClaims()
+
+  if (claimsError || !data?.claims) {
+    console.error("[auth/callback] getClaims error:", claimsError?.message)
+    return NextResponse.redirect(`${origin}/auth/error`)
+  }
+
+  const userId = data.claims.sub
+
+  // New user? Send to onboarding
   const { data: profile } = await supabase
     .from("profiles")
     .select("id")
-    .eq("id", session.user.id)
+    .eq("id", userId)
     .single()
 
   const destination = profile ? next : "/onboarding"
-
   return NextResponse.redirect(`${origin}${destination}`)
 }
