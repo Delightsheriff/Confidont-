@@ -191,7 +191,7 @@ export default function JourneyMap() {
         </div>
 
         {/* Session path */}
-        <div className="relative flex flex-col gap-3">
+        <div className="relative z-0 flex flex-col gap-3">
           <div className="absolute top-8 bottom-8 left-6.75 z-0 w-px bg-border" />
 
           {cards.map((card, i) => {
@@ -274,7 +274,7 @@ function SessionCard({
   return (
     <div className="flex items-start gap-4">
       {/* Node */}
-      <div className="z-10 mt-4 shrink-0">
+      <div className="z-0 mt-4 shrink-0">
         <NodeIcon state={card.state} />
       </div>
 
@@ -590,20 +590,21 @@ function buildSessionCards(
 
     // ── Next session (i === completedCount + 1) ──
 
-    // Free cap reached — no more sessions available
-    if (daily.isFreeCapReached) {
-      cards.push({
-        sessionNumber: i,
-        state: "free-cap-reached" as SessionCardState,
-      })
-      continue
-    }
-
-    // At daily soft limit — show nudge on tap
+    // At daily soft limit — show nudge on tap (can come back tomorrow)
+    // Check this FIRST before free cap — daily limit is temporary
     if (daily.isAtDailyLimit) {
       cards.push({
         sessionNumber: i,
         state: "available-at-limit" as SessionCardState,
+      })
+      continue
+    }
+
+    // Free cap reached — no more sessions available (hard stop, must upgrade)
+    if (daily.isFreeCapReached) {
+      cards.push({
+        sessionNumber: i,
+        state: "free-cap-reached" as SessionCardState,
       })
       continue
     }
