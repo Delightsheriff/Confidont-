@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useAuth } from "@/hooks/useAuth"
-import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 
 // ─────────────────────────────────────────────
 // AuthModal
@@ -31,7 +30,6 @@ type ModalState = "idle" | "loading" | "magic-sent" | "error"
 
 export default function AuthModal({
   onDismiss,
-  onSuccess,
   context = "general",
   guestSessionCount = 0,
 }: AuthModalProps) {
@@ -39,12 +37,6 @@ export default function AuthModal({
   const [email, setEmail] = useState("")
   const [modalState, setModalState] = useState<ModalState>("idle")
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-
-  const afterAuth = async () => {
-    await syncProgressFromSupabase()
-    clearGuestSessionCount()
-    onSuccess?.()
-  }
 
   const handleGoogle = async () => {
     setModalState("loading")

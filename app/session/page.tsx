@@ -16,6 +16,8 @@ import SessionAnalyzer, {
 } from "@/components/session/SessionAnalyzer"
 import SessionSummary from "@/components/session/SessionSummary"
 import { getProgress } from "@/lib/storage/session"
+import { getProfile } from "@/lib/storage/user"
+import { PERSONAS } from "@/types/user"
 
 // ─────────────────────────────────────────────
 // /session page
@@ -31,6 +33,12 @@ type PageState = "session" | "summary"
 
 export default function SessionPage() {
   const progress = getProgress()
+  const profile = getProfile()
+  const persona = profile
+    ? (PERSONAS.find((p) => p.id === profile.personaId) ?? PERSONAS[0])
+    : PERSONAS[0]
+  const userName = profile?.name ?? "there"
+  const goal = profile?.goal ?? "general comfort"
 
   const [pageState, setPageState] = useState<PageState>("session")
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null)
@@ -50,9 +58,9 @@ export default function SessionPage() {
       <SessionSummary
         result={sessionResult}
         phase={progress.currentPhase}
-        personaName="Maya"
-        userName="there"
-        goal="general comfort"
+        personaName={persona.name}
+        userName={userName}
+        goal={goal}
         totalSessions={progress.totalSessions}
         onRestart={handleRestart}
       />
@@ -62,9 +70,9 @@ export default function SessionPage() {
   return (
     <SessionAnalyzer
       phase={progress.currentPhase}
-      personaName="Maya"
-      userName="there"
-      goal="general comfort"
+      personaName={persona.name}
+      userName={userName}
+      goal={goal}
       weakAreas={progress.weakAreas}
       completedTopics={progress.completedTopics}
       totalSessions={progress.totalSessions}

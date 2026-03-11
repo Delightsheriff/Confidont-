@@ -7,18 +7,47 @@
 // ─────────────────────────────────────────────
 
 import type { UserProfile, OnboardingAnswers } from "@/types/user"
+import { createClient } from "@/lib/supabase/client"
 
 const PROFILE_KEY = "confidont_profile"
 
-// STUB — swap for Supabase upsert when ready
-export function saveProfile(answers: OnboardingAnswers): UserProfile {
+// Save to localStorage (fast cache), then upsert to Supabase when authenticated
+export async function saveProfile(
+  answers: OnboardingAnswers
+): Promise<UserProfile> {
   const profile: UserProfile = {
     ...answers,
     completedAt: new Date().toISOString(),
   }
+
+  // Always write to localStorage first
   if (typeof window !== "undefined") {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
   }
+
+  // Upsert to Supabase when authenticated
+  try {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from("profiles").upsert({
+        id: user.id,
+        name: answers.name,
+        pronouns: answers.pronouns,
+        goal: answers.goal,
+        camera_confidence: answers.cameraConfidence,
+        success_definition: answers.successDefinition,
+        sessions_per_day: answers.sessionsPerDay,
+        persona_id: answers.personaId,
+        completed_at: profile.completedAt,
+      })
+    }
+  } catch (err) {
+    console.error("Supabase profile upsert failed:", err)
+  }
+
   return profile
 }
 

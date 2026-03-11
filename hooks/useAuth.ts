@@ -1,21 +1,13 @@
 "use client"
 
-// ─────────────────────────────────────────────
-// hooks/useAuth.ts
-//
-// Auth state and actions for client components.
-//
-// Returns:
-// - user — current Supabase user or null
-// - isLoading — auth state resolving
-// - signInWithGoogle()
-// - signInWithMagicLink(email)
-// - signOut()
-// ─────────────────────────────────────────────
-
 import { useEffect, useState, useCallback } from "react"
 import type { User } from "@supabase/supabase-js"
-import { browser } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
+import { syncProgressFromSupabase } from "@/lib/storage/session"
+import {
+  clearGuestSessionCount,
+  getGuestSessionCount,
+} from "@/lib/storage/guestSessions"
 
 export interface UseAuthReturn {
   user: User | null
@@ -28,7 +20,7 @@ export interface UseAuthReturn {
 export function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = browser()
+  const supabase = createClient()
 
   useEffect(() => {
     // Get current session on mount
@@ -47,6 +39,19 @@ export function useAuth(): UseAuthReturn {
 
     return () => subscription.unsubscribe()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Post-auth sync — handles both Google OAuth (flag) and magic link (guest count)
+  useEffect(() => {
+    if (user && typeof window !== "undefined") {
+      const postAuthFlag = sessionStorage.getItem("confidont_post_auth_sync")
+      const guestCount = getGuestSessionCount()
+
+      if (postAuthFlag || guestCount > 0) {
+        if (postAuthFlag) sessionStorage.removeItem("confidont_post_auth_sync")
+        syncProgressFromSupabase().then(() => clearGuestSessionCount())
+      }
+    }
+  }, [user])
 
   const signInWithGoogle = useCallback(async () => {
     await supabase.auth.signInWithOAuth({
