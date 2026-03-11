@@ -1,0 +1,8 @@
+export { default as Onboarding } from "./Onboarding"
+export { ProgressDots } from "./ProgressDots"
+export { StepName } from "./StepName"
+export { StepPronouns } from "./StepPronouns"
+export { StepGoal } from "./StepGoal"
+export { StepCameraConfidence } from "./StepCameraConfidence"
+export { StepSessionsPerDay } from "./StepSessionsPerDay"
+export { StepPersona } from "./StepPersona"

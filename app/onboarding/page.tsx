@@ -1,6 +1,6 @@
 "use client"
 
-import Onboarding from "@/components/onboarding/onboarding"
+import { Onboarding } from "@/components/onboarding"
 import { useRouter } from "next/navigation"
 
 export default function OnboardingPage() {
