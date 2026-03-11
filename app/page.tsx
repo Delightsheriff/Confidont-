@@ -1,12 +1,10 @@
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { hasCompletedOnboarding } from "@/lib/storage/user"
-import { joinWaitlist } from "@/lib/storage/waitlist"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { WaitlistForm } from "@/components/landing"
 import {
   Card,
   CardContent,
@@ -115,7 +113,7 @@ export default function LandingPage() {
                 body: "After each session, your coach breaks down what went well and what to focus on next. Progress you can actually see.",
               },
             ].map((item) => (
-              <Card key={item.step} className="border-primary/10 bg-primary/[0.02]">
+              <Card key={item.step} className="border-primary/10 bg-primary/2">
                 <CardHeader>
                   <p className="font-mono text-3xl font-bold text-primary/20">
                     {item.step}
@@ -176,10 +174,7 @@ export default function LandingPage() {
                 body: "Camera anxiety is more common than you think. You're not alone.",
               },
             ].map((item) => (
-              <Card
-                key={item.title}
-                className="flex items-start gap-4 p-4"
-              >
+              <Card key={item.title} className="flex items-start gap-4 p-4">
                 <span className="mt-0.5 shrink-0 text-xl">{item.icon}</span>
                 <div>
                   <CardTitle className="font-mono text-sm">
@@ -210,8 +205,8 @@ export default function LandingPage() {
                 Get early access.
               </CardTitle>
               <CardDescription className="text-sm leading-relaxed">
-                Confidont is in beta. Join the waitlist and be among the first to
-                get full access when we launch.
+                Confidont is in beta. Join the waitlist and be among the first
+                to get full access when we launch.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -239,92 +234,4 @@ export default function LandingPage() {
       </footer>
     </div>
   )
-}
-
-// ── Waitlist form ──────────────────────────────
-
-type FormState = "idle" | "loading" | "success" | "already" | "error"
-
-function WaitlistForm() {
-  const [email, setEmail] = useState("")
-  const [formState, setFormState] = useState<FormState>("idle")
-
-  const handleSubmit = async () => {
-    const trimmed = email.trim().toLowerCase()
-    if (!isValidEmail(trimmed)) return
-    setFormState("loading")
-    const result = await joinWaitlist(trimmed)
-    if (!result.success) {
-      setFormState("error")
-      return
-    }
-    if (result.alreadyJoined) {
-      setFormState("already")
-      return
-    }
-    setFormState("success")
-  }
-
-  if (formState === "success") {
-    return (
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="flex flex-col gap-2 pt-6">
-          <p className="text-2xl">🎉</p>
-          <p className="font-mono font-bold text-foreground">
-            You&apos;re on the list.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            We&apos;ll email you the moment early access opens.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (formState === "already") {
-    return (
-      <Card>
-        <CardContent className="flex flex-col gap-2 pt-6">
-          <p className="font-mono font-bold text-foreground">
-            You&apos;re already on the list.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            We haven&apos;t forgotten about you.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-2">
-        <Input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="your@email.com"
-          className="flex-1 rounded-full px-5 py-3 font-mono text-sm"
-        />
-        <Button
-          onClick={handleSubmit}
-          disabled={formState === "loading" || !isValidEmail(email.trim())}
-          size="lg"
-          className="shrink-0 rounded-full px-6 font-mono"
-        >
-          {formState === "loading" ? "..." : "Join →"}
-        </Button>
-      </div>
-      {formState === "error" && (
-        <p className="text-center font-mono text-xs text-destructive">
-          Something went wrong. Try again.
-        </p>
-      )}
-    </div>
-  )
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }

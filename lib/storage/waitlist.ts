@@ -1,51 +1,49 @@
 // ─────────────────────────────────────────────
 // lib/storage/waitlist.ts
 //
-// Waitlist email capture.
-// Stub — localStorage now.
-// Swap for Mailchimp / Resend / Supabase later.
+// Waitlist — Supabase insert + Resend emails.
+//
+// On join:
+// 1. Insert to Supabase waitlist table
+// 2. POST to /api/waitlist/notify — sends emails
+//    via Resend (non-blocking, won't break UX)
 // ─────────────────────────────────────────────
 
-const WAITLIST_KEY = "confidont_waitlist"
+import { createClient } from "@/lib/supabase/client"
 
-export interface WaitlistEntry {
-  email: string
-  joinedAt: string
-}
-
-// STUB — swap for API call when ready
 export async function joinWaitlist(
   email: string
 ): Promise<{ success: boolean; alreadyJoined: boolean }> {
-  if (typeof window === "undefined")
-    return { success: false, alreadyJoined: false }
+  const trimmed = email.toLowerCase().trim()
 
   try {
-    const existing = getWaitlistEntries()
-    const already = existing.some(
-      (e) => e.email.toLowerCase() === email.toLowerCase()
-    )
+    const supabase = createClient()
 
-    if (already) return { success: true, alreadyJoined: true }
+    const { error } = await supabase.from("waitlist").insert({ email: trimmed })
 
-    const entry: WaitlistEntry = {
-      email: email.toLowerCase().trim(),
-      joinedAt: new Date().toISOString(),
+    if (error) {
+      // Postgres unique violation — already on the list
+      if (error.code === "23505") return { success: true, alreadyJoined: true }
+      console.error("[waitlist] Supabase insert error:", error.message)
+      return { success: false, alreadyJoined: false }
     }
 
-    localStorage.setItem(WAITLIST_KEY, JSON.stringify([...existing, entry]))
+    // Fire emails — non-blocking, won't affect UX on failure
+    sendWaitlistEmails(trimmed).catch((err) =>
+      console.error("[waitlist] Email send error:", err)
+    )
+
     return { success: true, alreadyJoined: false }
-  } catch {
+  } catch (err) {
+    console.error("[waitlist] Unexpected error:", err)
     return { success: false, alreadyJoined: false }
   }
 }
 
-export function getWaitlistEntries(): WaitlistEntry[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(WAITLIST_KEY)
-    return raw ? (JSON.parse(raw) as WaitlistEntry[]) : []
-  } catch {
-    return []
-  }
+async function sendWaitlistEmails(email: string): Promise<void> {
+  await fetch("/api/waitlist/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  })
 }
