@@ -11,21 +11,6 @@ import {
 } from "@/lib/storage/guestSessions"
 import type { SessionResult } from "@/components/session/SessionAnalyzer"
 
-// ─────────────────────────────────────────────
-// SessionSummary
-//
-// Post-session screen.
-//
-// Auth flow:
-// - Session always saves to localStorage immediately
-// - If guest AND guestSessionCount >= 1 after save
-//   → show auth prompt ("keep this safe")
-// - If user dismisses → they stay a guest, prompt
-//   appears again after next session
-// - On sign-in → syncProgressFromSupabase() pushes
-//   local data up, guestSessionCount cleared
-// ─────────────────────────────────────────────
-
 interface SessionSummaryProps {
   result: SessionResult
   phase: number
@@ -34,6 +19,7 @@ interface SessionSummaryProps {
   goal: string
   totalSessions: number
   onRestart: () => void
+  onBack: () => void
 }
 
 type FeedbackState = "loading" | "ready" | "saved"
@@ -46,8 +32,10 @@ export default function SessionSummary({
   goal,
   totalSessions,
   onRestart,
+  onBack,
 }: SessionSummaryProps) {
   const { user } = useAuth()
+
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("loading")
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [guestCount, setGuestCount] = useState(0)
@@ -62,10 +50,9 @@ export default function SessionSummary({
     setGuestCount(getGuestSessionCount())
   }, [])
 
-  // ── Load feedback on mount ───────────────────
+  // Load feedback on mount
   useEffect(() => {
     let cancelled = false
-
     const load = async () => {
       const fb = await generateFeedback({
         personaName,
@@ -78,24 +65,20 @@ export default function SessionSummary({
         durationSeconds: result.durationSeconds,
         totalSessions,
       })
-
       if (!cancelled) {
         setFeedback(fb)
         setFeedbackState("ready")
       }
     }
-
     load()
     return () => {
       cancelled = true
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Save ─────────────────────────────────────
   const handleSave = async () => {
     if (!feedback) return
 
-    // Always save locally first — no blocking
     await saveSession({
       id: `session_${Date.now()}`,
       date: new Date().toISOString(),
@@ -108,12 +91,11 @@ export default function SessionSummary({
 
     setFeedbackState("saved")
 
-    // Guest — increment count and prompt if >= 1 session done
+    // Guest — increment and prompt auth
     if (!user) {
       const count = incrementGuestSessionCount()
       setGuestCount(count)
       if (count >= 1) {
-        // Small delay so "saved" state renders first
         setTimeout(() => setShowAuthModal(true), 600)
       }
     }
@@ -121,12 +103,22 @@ export default function SessionSummary({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-6 text-foreground">
-      {/* Header */}
-      <div className="space-y-1 text-center">
-        <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
-        <p className="font-mono text-xs text-muted-foreground">
-          Session complete
-        </p>
+      {/* Header with back button */}
+      <div className="relative flex w-full max-w-2xl items-center justify-center">
+        <button
+          onClick={onBack}
+          className="absolute left-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          ← home
+        </button>
+        <div className="flex flex-col gap-1 text-center">
+          <h1 className="font-mono text-2xl font-bold text-primary">
+            Confidont
+          </h1>
+          <p className="font-mono text-xs text-muted-foreground">
+            Session complete
+          </p>
+        </div>
       </div>
 
       {/* Feedback card */}
@@ -177,13 +169,13 @@ export default function SessionSummary({
 
             <div className="h-px bg-border" />
 
-            {feedback?.pointsEarned != null && feedback.pointsEarned > 0 && (
+            {(feedback?.pointsEarned ?? 0) > 0 && (
               <div className="flex items-center justify-between">
                 <p className="font-mono text-xs text-muted-foreground">
                   Points earned
                 </p>
                 <p className="font-mono text-lg font-bold text-primary">
-                  +{feedback.pointsEarned}
+                  +{feedback?.pointsEarned}
                 </p>
               </div>
             )}
@@ -277,6 +269,13 @@ export default function SessionSummary({
           >
             Start Again
           </button>
+
+          <button
+            onClick={onBack}
+            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ← back to home
+          </button>
         </div>
       )}
 
@@ -292,10 +291,6 @@ export default function SessionSummary({
     </div>
   )
 }
-
-// ─────────────────────────────────────────────
-// Sub-components
-// ─────────────────────────────────────────────
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -318,13 +313,7 @@ function ScoreCard({
         {label}
       </p>
       <p
-        className={`font-mono text-lg font-bold ${
-          status === "good"
-            ? "text-primary"
-            : status === "bad"
-              ? "text-destructive"
-              : "text-muted-foreground"
-        }`}
+        className={`font-mono text-lg font-bold ${status === "good" ? "text-primary" : status === "bad" ? "text-destructive" : "text-muted-foreground"}`}
       >
         {value}
       </p>

@@ -6,10 +6,6 @@ import { getProfile } from "@/lib/storage/user"
 import { getProgress } from "@/lib/storage/session"
 import { getDailyStatus } from "@/lib/logic/dailyLimit"
 import { PERSONAS } from "@/types/user"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { cn } from "@/lib/utils"
 import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
 import { FREE_SESSION_LIMIT, TOTAL_VISIBLE_SESSIONS } from "@/configs/tiers"
@@ -87,11 +83,6 @@ export default function JourneyMap() {
   const [toast, setToast] = useState<string | null>(null)
   const [showDayNudge, setShowDayNudge] = useState(false)
 
-  const fireToast = useCallback((msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2000)
-  }, [])
-
   if (!profile) {
     router.replace("/onboarding")
     return null
@@ -105,6 +96,11 @@ export default function JourneyMap() {
     PHASES.findLast(
       (p) => p.startsAt <= Math.max(progress.totalSessions + 1, 1)
     ) ?? PHASES[0]
+
+  const fireToast = useCallback((msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2000)
+  }, [])
 
   const handleCardTap = (card: SessionCardData) => {
     switch (card.state) {
@@ -138,10 +134,7 @@ export default function JourneyMap() {
           </h1>
           <div className="flex items-center gap-2">
             <div
-              className={cn(
-                "flex size-7 items-center justify-center rounded-full font-mono text-xs font-bold text-white",
-                persona.colorAccent
-              )}
+              className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
             >
               {persona.name[0]}
             </div>
@@ -152,9 +145,9 @@ export default function JourneyMap() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-lg flex-col gap-8 px-6 py-8">
+      <div className="mx-auto max-w-lg space-y-8 px-6 py-8">
         {/* Greeting */}
-        <div className="flex flex-col gap-1">
+        <div className="space-y-1">
           <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
             {getGreeting()}
           </p>
@@ -177,13 +170,13 @@ export default function JourneyMap() {
         </div>
 
         {/* Phase label */}
-        <div className="flex flex-col gap-1">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Separator className="flex-1" />
+            <div className="h-px flex-1 bg-border" />
             <span className="px-2 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
               Phase {currentPhase.id} — {currentPhase.name}
             </span>
-            <Separator className="flex-1" />
+            <div className="h-px flex-1 bg-border" />
           </div>
           <p className="text-center text-xs text-muted-foreground">
             {currentPhase.description}
@@ -191,8 +184,8 @@ export default function JourneyMap() {
         </div>
 
         {/* Session path */}
-        <div className="relative z-0 flex flex-col gap-3">
-          <div className="absolute top-8 bottom-8 left-6.75 z-0 w-px bg-border" />
+        <div className="relative space-y-3">
+          <div className="absolute top-8 bottom-8 left-[27px] -z-0 w-px bg-border" />
 
           {cards.map((card, i) => {
             const isPhaseStart = PHASES.some(
@@ -211,11 +204,11 @@ export default function JourneyMap() {
           })}
 
           <div className="flex items-center gap-3 pt-2 pl-2">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border">
               <span className="text-xs text-muted-foreground/40">∞</span>
             </div>
             <p className="font-mono text-xs text-muted-foreground/40">
-              The journey doesn&apos;t end here.
+              The journey doesn't end here.
             </p>
           </div>
         </div>
@@ -274,7 +267,7 @@ function SessionCard({
   return (
     <div className="flex items-start gap-4">
       {/* Node */}
-      <div className="z-0 mt-4 shrink-0">
+      <div className="z-10 mt-4 flex-shrink-0">
         <NodeIcon state={card.state} />
       </div>
 
@@ -282,10 +275,7 @@ function SessionCard({
       <button
         onClick={isClickable ? onTap : undefined}
         disabled={!isClickable}
-        className={cn(
-          "mb-1 w-full flex-1 rounded-xl border text-left transition-all duration-200",
-          cardStyles[card.state]
-        )}
+        className={`mb-1 w-full flex-1 rounded-xl border text-left transition-all duration-200 ${cardStyles[card.state]}`}
       >
         {isPhaseStart && (
           <div className="px-4 pt-3 pb-0">
@@ -298,16 +288,15 @@ function SessionCard({
 
         <div className="px-4 py-3.5">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <p
-                className={cn(
-                  "font-mono text-xs tracking-widest uppercase",
+                className={`font-mono text-xs tracking-widest uppercase ${
                   card.state === "locked-premium" ||
-                    card.state === "locked-progress" ||
-                    card.state === "free-cap-reached"
+                  card.state === "locked-progress" ||
+                  card.state === "free-cap-reached"
                     ? "text-muted-foreground/40"
                     : "text-muted-foreground"
-                )}
+                }`}
               >
                 Session {card.sessionNumber}
               </p>
@@ -373,27 +362,24 @@ function CardAction({ card }: { card: SessionCardData }) {
   switch (card.state) {
     case "available":
       return (
-        <Badge className="shrink-0 rounded-full px-4 py-1.5 font-mono text-xs">
+        <span className="flex-shrink-0 rounded-full bg-primary px-4 py-1.5 font-mono text-xs font-bold text-primary-foreground">
           Start →
-        </Badge>
+        </span>
       )
     case "available-at-limit":
       return (
-        <Badge
-          variant="outline"
-          className="shrink-0 rounded-full border-primary/50 px-4 py-1.5 font-mono text-xs text-primary"
-        >
+        <span className="flex-shrink-0 rounded-full border border-primary/50 px-4 py-1.5 font-mono text-xs font-bold text-primary">
           Start →
-        </Badge>
+        </span>
       )
     case "completed":
       return card.date ? (
-        <p className="shrink-0 font-mono text-[10px] text-muted-foreground/40">
+        <p className="flex-shrink-0 font-mono text-[10px] text-muted-foreground/40">
           {formatDate(card.date)}
         </p>
       ) : null
     case "locked-premium":
-      return <LockIcon className="shrink-0 text-muted-foreground/30" />
+      return <LockIcon className="flex-shrink-0 text-muted-foreground/30" />
     default:
       return null
   }
@@ -402,7 +388,7 @@ function CardAction({ card }: { card: SessionCardData }) {
 function NodeIcon({ state }: { state: SessionCardState }) {
   if (state === "completed") {
     return (
-      <div className="flex size-7 items-center justify-center rounded-full bg-primary">
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path
             d="M2 6l3 3 5-5"
@@ -417,27 +403,27 @@ function NodeIcon({ state }: { state: SessionCardState }) {
   }
   if (state === "available") {
     return (
-      <div className="flex size-7 animate-pulse items-center justify-center rounded-full border-2 border-primary bg-primary/10">
-        <div className="size-2 rounded-full bg-primary" />
+      <div className="flex h-7 w-7 animate-pulse items-center justify-center rounded-full border-2 border-primary bg-primary/10">
+        <div className="h-2 w-2 rounded-full bg-primary" />
       </div>
     )
   }
   if (state === "available-at-limit") {
     return (
-      <div className="flex size-7 items-center justify-center rounded-full border-2 border-primary/40 bg-background">
-        <div className="size-2 rounded-full bg-primary/40" />
+      <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary/40 bg-background">
+        <div className="h-2 w-2 rounded-full bg-primary/40" />
       </div>
     )
   }
   if (state === "free-cap-reached") {
     return (
-      <div className="flex size-7 items-center justify-center rounded-full border border-border bg-background">
+      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background">
         <span className="text-[10px]">🌙</span>
       </div>
     )
   }
   return (
-    <div className="flex size-7 items-center justify-center rounded-full border border-dashed border-border/50 bg-background">
+    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border/50 bg-background">
       <LockIcon className="text-muted-foreground/30" />
     </div>
   )
@@ -476,33 +462,30 @@ function DayNudgeModal({
         className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm"
         onClick={onDismiss}
       />
-      <div className="fixed right-0 bottom-0 left-0 z-50 mx-auto flex max-w-lg animate-in flex-col gap-5 rounded-t-2xl border-t border-border bg-card px-6 pt-6 pb-10 duration-300 slide-in-from-bottom">
+      <div className="fixed right-0 bottom-0 left-0 z-50 mx-auto max-w-lg animate-in space-y-5 rounded-t-2xl border-t border-border bg-card px-6 pt-6 pb-10 duration-300 slide-in-from-bottom">
         <div className="mx-auto h-1 w-8 rounded-full bg-border" />
-        <div className="flex flex-col gap-1.5">
+        <div className="space-y-1.5">
           <p className="font-mono text-base font-bold text-foreground">
-            That&apos;s your {limitForToday} for today.
+            That's your {limitForToday} for today.
           </p>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {personaName} will be here {nextUnlockDate}. But if you want to keep
-            going — you&apos;ve earned it.
+            going — you've earned it.
           </p>
         </div>
-        <div className="flex flex-col gap-2">
-          <Button
+        <div className="space-y-2">
+          <button
             onClick={onKeepGoing}
-            size="lg"
-            className="w-full rounded-full font-mono"
+            className="w-full rounded-full bg-primary py-3.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90"
           >
             Keep going →
-          </Button>
-          <Button
-            variant="outline"
+          </button>
+          <button
             onClick={onDismiss}
-            size="lg"
-            className="w-full rounded-full font-mono"
+            className="w-full rounded-full border border-border py-3.5 font-mono text-sm font-bold text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground"
           >
             See you {nextUnlockDate}
-          </Button>
+          </button>
         </div>
       </div>
     </>
@@ -521,8 +504,8 @@ function UpgradeCard({
   userName: string
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-5">
-      <div className="flex flex-col gap-1">
+    <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+      <div className="space-y-1">
         <p className="font-mono text-xs tracking-widest text-primary uppercase">
           Keep going, {userName}
         </p>
@@ -531,9 +514,9 @@ function UpgradeCard({
           building.
         </p>
       </div>
-      <Button size="lg" className="w-full rounded-full font-mono">
+      <button className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90">
         Unlock Full Access
-      </Button>
+      </button>
       <p className="text-center font-mono text-[10px] text-muted-foreground">
         Pricing coming soon — beta users get early access.
       </p>
@@ -590,21 +573,20 @@ function buildSessionCards(
 
     // ── Next session (i === completedCount + 1) ──
 
-    // At daily soft limit — show nudge on tap (can come back tomorrow)
-    // Check this FIRST before free cap — daily limit is temporary
-    if (daily.isAtDailyLimit) {
-      cards.push({
-        sessionNumber: i,
-        state: "available-at-limit" as SessionCardState,
-      })
-      continue
-    }
-
-    // Free cap reached — no more sessions available (hard stop, must upgrade)
+    // Free cap reached — no more sessions available
     if (daily.isFreeCapReached) {
       cards.push({
         sessionNumber: i,
         state: "free-cap-reached" as SessionCardState,
+      })
+      continue
+    }
+
+    // At daily soft limit — show nudge on tap
+    if (daily.isAtDailyLimit) {
+      cards.push({
+        sessionNumber: i,
+        state: "available-at-limit" as SessionCardState,
       })
       continue
     }
@@ -622,7 +604,7 @@ function buildSessionCards(
 
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-border bg-card px-3 py-3 text-center">
+    <div className="space-y-0.5 rounded-xl border border-border bg-card px-3 py-3 text-center">
       <p className="font-mono text-lg font-bold text-foreground">{value}</p>
       <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
         {label}

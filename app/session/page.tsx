@@ -1,16 +1,7 @@
-// import SessionAnalyzer from "@/components/session/SessionAnalyzer"
-
-// export default function Page() {
-//   return (
-//     <>
-//       {/* <CameraAnalyzer /> */}
-//       <SessionAnalyzer />
-//     </>
-//   )
-// }
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import SessionAnalyzer, {
   type SessionResult,
 } from "@/components/session/SessionAnalyzer"
@@ -19,19 +10,10 @@ import { getProgress } from "@/lib/storage/session"
 import { getProfile } from "@/lib/storage/user"
 import { PERSONAS } from "@/types/user"
 
-// ─────────────────────────────────────────────
-// /session page
-//
-// Orchestrates the full session flow:
-// SessionAnalyzer → SessionSummary → SessionAnalyzer
-//
-// User context pulled from storage (localStorage now,
-// Supabase later — swap inside getProgress only).
-// ─────────────────────────────────────────────
-
 type PageState = "session" | "summary"
 
 export default function SessionPage() {
+  const router = useRouter()
   const progress = getProgress()
   const profile = getProfile()
   const persona = profile
@@ -53,6 +35,8 @@ export default function SessionPage() {
     setPageState("session")
   }
 
+  const handleBack = () => router.push("/home")
+
   if (pageState === "summary" && sessionResult) {
     return (
       <SessionSummary
@@ -63,6 +47,7 @@ export default function SessionPage() {
         goal={goal}
         totalSessions={progress.totalSessions}
         onRestart={handleRestart}
+        onBack={handleBack}
       />
     )
   }
@@ -77,6 +62,7 @@ export default function SessionPage() {
       completedTopics={progress.completedTopics}
       totalSessions={progress.totalSessions}
       onSessionComplete={handleSessionComplete}
+      onBack={handleBack}
     />
   )
 }

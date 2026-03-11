@@ -7,15 +7,6 @@ import { DEFAULT_CONFIG } from "@/lib/session-config"
 import { generateTopics } from "@/lib/ai/topics"
 import type { SessionTopic } from "@/lib/ai/topics"
 import type { Nudge, SessionScore } from "@/types/session"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-
-const WAVEFORM_HEIGHTS = Array.from({ length: 60 }, (_, i) =>
-  Math.round((10 + Math.sin(i * 0.4) * 6) * 100) / 100
-)
 
 // ─────────────────────────────────────────────
 // SessionAnalyzer
@@ -42,6 +33,7 @@ interface SessionAnalyzerProps {
   completedTopics?: string[]
   totalSessions?: number
   onSessionComplete: (result: SessionResult) => void
+  onBack?: () => void
 }
 
 export interface SessionResult {
@@ -60,6 +52,7 @@ export default function SessionAnalyzer({
   completedTopics = [],
   totalSessions = 0,
   onSessionComplete,
+  onBack,
 }: SessionAnalyzerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -108,70 +101,6 @@ export default function SessionAnalyzer({
     }
   }, [])
 
-  // ── Waveform ─────────────────────────────────
-  const drawWaveform = useCallback(() => {
-    const canvas = canvasRef.current
-    const analyser = analyserRef.current
-    if (!canvas || !analyser) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-
-    const draw = () => {
-      waveAnimRef.current = requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-      const barWidth = (canvas.width / bufferLength) * 1.5
-      let x = 0
-
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height * 0.9
-        ctx.fillStyle = `rgba(81, 150, 150, ${0.4 + (dataArray[i] / 255) * 0.6})`
-        ctx.beginPath()
-        ctx.roundRect(
-          x,
-          (canvas.height - barHeight) / 2,
-          barWidth - 1,
-          barHeight,
-          2
-        )
-        ctx.fill()
-        x += barWidth + 1
-      }
-    }
-    draw()
-  }, [])
-
-  const setupWaveform = useCallback(
-    (stream: MediaStream) => {
-      try {
-        const audioCtx = new AudioContext()
-        const source = audioCtx.createMediaStreamSource(stream)
-        const analyser = audioCtx.createAnalyser()
-        analyser.fftSize = 128
-        source.connect(analyser)
-        analyserRef.current = analyser
-        drawWaveform()
-      } catch (err) {
-        console.warn("Web Audio API unavailable:", err)
-      }
-    },
-    [drawWaveform]
-  )
-
-  const stopWaveform = useCallback(() => {
-    if (waveAnimRef.current !== undefined) {
-      cancelAnimationFrame(waveAnimRef.current)
-      waveAnimRef.current = undefined
-    }
-    const canvas = canvasRef.current
-    if (canvas)
-      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
-  }, [])
-
   const stopCamera = useCallback(() => {
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream
@@ -180,7 +109,7 @@ export default function SessionAnalyzer({
     }
     analyserRef.current = null
     stopWaveform()
-  }, [stopWaveform])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Topic timer ──────────────────────────────
   const startTopicTimer = useCallback(() => {
@@ -240,7 +169,6 @@ export default function SessionAnalyzer({
     }
   }, [
     startCamera,
-    setupWaveform,
     startTopicTimer,
     userName,
     goal,
@@ -248,7 +176,7 @@ export default function SessionAnalyzer({
     weakAreas,
     completedTopics,
     totalSessions,
-  ])
+  ]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Next topic ───────────────────────────────
   const nextTopic = useCallback(() => {
@@ -299,13 +227,74 @@ export default function SessionAnalyzer({
       stopCamera()
       stopWaveform()
     }
-  }, [stopTopicTimer, stopCamera, stopWaveform])
+  }, [stopTopicTimer, stopCamera]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Waveform ─────────────────────────────────
+  const setupWaveform = useCallback((stream: MediaStream) => {
+    try {
+      const audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 128
+      source.connect(analyser)
+      analyserRef.current = analyser
+      drawWaveform()
+    } catch (err) {
+      console.warn("Web Audio API unavailable:", err)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const drawWaveform = useCallback(() => {
+    const canvas = canvasRef.current
+    const analyser = analyserRef.current
+    if (!canvas || !analyser) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const draw = () => {
+      waveAnimRef.current = requestAnimationFrame(draw)
+      analyser.getByteFrequencyData(dataArray)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const barWidth = (canvas.width / bufferLength) * 1.5
+      let x = 0
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height * 0.9
+        ctx.fillStyle = `rgba(81, 150, 150, ${0.4 + (dataArray[i] / 255) * 0.6})`
+        ctx.beginPath()
+        ctx.roundRect(
+          x,
+          (canvas.height - barHeight) / 2,
+          barWidth - 1,
+          barHeight,
+          2
+        )
+        ctx.fill()
+        x += barWidth + 1
+      }
+    }
+    draw()
+  }, [])
+
+  const stopWaveform = useCallback(() => {
+    if (waveAnimRef.current !== undefined) {
+      cancelAnimationFrame(waveAnimRef.current)
+      waveAnimRef.current = undefined
+    }
+    const canvas = canvasRef.current
+    if (canvas)
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
+  }, [])
 
   // ── Render ───────────────────────────────────
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-foreground">
       {/* Header */}
-      <div className="flex flex-col gap-1 text-center">
+      <div className="space-y-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
         <p className="font-mono text-xs text-muted-foreground">
           {sessionState === "loading-topics"
@@ -329,10 +318,9 @@ export default function SessionAnalyzer({
           autoPlay
           playsInline
           muted
-          className={cn(
-            "absolute inset-0 size-full -scale-x-100 object-cover transition-opacity duration-300",
+          className={`absolute inset-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-300 ${
             showDebugFeed ? "opacity-100" : "opacity-0"
-          )}
+          }`}
         />
 
         {/* Gradient overlay */}
@@ -350,7 +338,7 @@ export default function SessionAnalyzer({
         {/* ── Loading topics state ── */}
         {sessionState === "loading-topics" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="font-mono text-sm text-muted-foreground">
               Preparing your session...
             </p>
@@ -361,21 +349,17 @@ export default function SessionAnalyzer({
         {isActive && currentTopic && (
           <>
             {/* Eye contact indicator — top left */}
-            <div className="absolute top-4 left-4">
-              <Badge
-                variant={frameMetrics?.eyeContact ? "default" : "secondary"}
-                className="font-mono"
-              >
-                <span
-                  className={cn(
-                    "size-2 rounded-full transition-colors",
-                    frameMetrics?.eyeContact
-                      ? "bg-primary-foreground"
-                      : "bg-muted-foreground"
-                  )}
-                />
+            <div className="absolute top-4 left-4 flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full transition-colors duration-300 ${
+                  frameMetrics?.eyeContact
+                    ? "bg-primary"
+                    : "bg-muted-foreground"
+                }`}
+              />
+              <span className="font-mono text-xs text-muted-foreground">
                 {frameMetrics?.eyeContact ? "Eye contact" : "Look at camera"}
-              </Badge>
+              </span>
             </div>
 
             {/* Duration — top right */}
@@ -385,7 +369,7 @@ export default function SessionAnalyzer({
 
             {/* Topic prompt — center */}
             <div className="absolute inset-0 flex items-center justify-center px-8">
-              <div className="flex flex-col gap-2 text-center">
+              <div className="space-y-2 text-center">
                 <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
                   Topic {topicIndex + 1} of {topics.length}
                 </p>
@@ -428,11 +412,11 @@ export default function SessionAnalyzer({
             />
           ) : (
             <div className="flex h-8 w-full items-center gap-px">
-              {WAVEFORM_HEIGHTS.map((height, i) => (
+              {Array.from({ length: 60 }).map((_, i) => (
                 <div
                   key={i}
                   className="flex-1 rounded-full bg-border"
-                  style={{ height: `${height}%` }}
+                  style={{ height: `${10 + Math.sin(i * 0.4) * 6}%` }}
                 />
               ))}
             </div>
@@ -441,23 +425,20 @@ export default function SessionAnalyzer({
 
         {/* Debug toggle — dev only */}
         {isDev && (
-          <Button
-            variant="ghost"
-            size="xs"
+          <button
             onClick={() => setShowDebugFeed((p) => !p)}
-            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 hover:text-muted-foreground"
+            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
           >
             {showDebugFeed ? "hide feed" : "debug feed"}
-          </Button>
+          </button>
         )}
       </div>
 
       {/* Error */}
       {cameraError && (
-        <Alert variant="destructive" className="max-w-sm font-mono text-xs">
-          <AlertTitle>Camera Error</AlertTitle>
-          <AlertDescription>{cameraError}</AlertDescription>
-        </Alert>
+        <p className="max-w-sm text-center font-mono text-xs text-destructive">
+          {cameraError}
+        </p>
       )}
 
       {/* ── Metrics Grid — active only ─────────── */}
@@ -568,59 +549,56 @@ export default function SessionAnalyzer({
       <div className="flex items-center gap-3">
         {/* Restart — visible during active session */}
         {sessionState === "active" && (
-          <Button
-            variant="outline"
+          <button
             onClick={restartSession}
-            className="rounded-full px-6 font-mono text-sm"
+            className="rounded-full border border-border px-6 py-3 font-mono text-sm text-muted-foreground transition-all hover:border-foreground/30"
           >
             Restart
-          </Button>
+          </button>
         )}
 
         {/* Main CTA */}
         {sessionState === "idle" && (
-          <Button
+          <button
             onClick={startSession}
             disabled={!isReady}
-            size="lg"
-            className="rounded-full px-10 font-mono text-sm font-bold"
+            className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
+              !isReady
+                ? "cursor-not-allowed bg-muted text-muted-foreground"
+                : "bg-primary text-primary-foreground hover:opacity-90"
+            }`}
           >
             {isReady ? "Start Session" : "Loading AI..."}
-          </Button>
+          </button>
         )}
 
         {sessionState === "loading-topics" && (
-          <Button
+          <button
             disabled
-            size="lg"
-            className="rounded-full px-10 font-mono text-sm font-bold"
+            className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
           >
             Preparing...
-          </Button>
+          </button>
         )}
 
         {/* Next Topic — appears after 30s minimum */}
         {sessionState === "active" && canAdvance && (
-          <Button
+          <button
             onClick={nextTopic}
-            size="lg"
-            className="animate-in rounded-full px-10 font-mono text-sm font-bold fade-in slide-in-from-bottom-1"
+            className="animate-in rounded-full bg-primary px-10 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 fade-in slide-in-from-bottom-1 hover:opacity-90"
           >
-            {topicIndex < topics.length - 1
-              ? "Next Topic \u2192"
-              : "Finish Session"}
-          </Button>
+            {topicIndex < topics.length - 1 ? "Next Topic →" : "Finish Session"}
+          </button>
         )}
 
         {/* Waiting for minimum time */}
         {sessionState === "active" && !canAdvance && (
-          <Button
+          <button
             disabled
-            size="lg"
-            className="rounded-full px-10 font-mono text-sm font-bold"
+            className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
           >
             Keep going...
-          </Button>
+          </button>
         )}
       </div>
     </div>
@@ -640,16 +618,15 @@ function formatDuration(seconds: number): string {
 function NudgeBanner({ nudge }: { nudge: Nudge }) {
   const isPositive = nudge.type === "positive-streak"
   return (
-    <Alert
-      className={cn(
-        "absolute right-4 bottom-20 left-4 animate-in text-center font-mono backdrop-blur-sm fade-in slide-in-from-bottom-2",
+    <div
+      className={`absolute right-4 bottom-20 left-4 animate-in rounded-xl px-4 py-2.5 text-center font-mono text-sm backdrop-blur-sm duration-300 fade-in slide-in-from-bottom-2 ${
         isPositive
-          ? "border-primary/30 bg-primary/20 text-primary"
-          : "bg-card/80"
-      )}
+          ? "border border-primary/30 bg-primary/20 text-primary"
+          : "border border-border bg-card/80 text-foreground"
+      }`}
     >
-      <AlertDescription className="text-sm">{nudge.message}</AlertDescription>
-    </Alert>
+      {nudge.message}
+    </div>
   )
 }
 
@@ -665,27 +642,24 @@ function MetricCard({
   detail: string
 }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p
-          className={cn(
-            "font-mono text-lg font-bold",
-            status === "good" && "text-primary",
-            status === "bad" && "text-destructive",
-            status === "neutral" && "text-muted-foreground"
-          )}
-        >
-          {value}
-        </p>
-        <p className="text-[11px] leading-tight text-muted-foreground">
-          {detail}
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
+      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p
+        className={`font-mono text-lg font-bold ${
+          status === "good"
+            ? "text-primary"
+            : status === "bad"
+              ? "text-destructive"
+              : "text-muted-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      <p className="text-[11px] leading-tight text-muted-foreground">
+        {detail}
+      </p>
+    </div>
   )
 }
