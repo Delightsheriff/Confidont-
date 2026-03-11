@@ -66,14 +66,14 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
-      <div className="fixed top-6 left-1/2 -translate-x-1/2">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 sm:p-6 pb-20 sm:pb-6">
+      <div className="fixed top-4 sm:top-6 left-1/2 -translate-x-1/2 z-50">
         <ProgressDots current={step} total={TOTAL_STEPS} />
       </div>
 
       <div
         className={cn(
-          "w-full max-w-lg transition-all duration-350 ease-out",
+          "w-full max-w-lg transition-all duration-350 ease-out px-1 sm:px-0",
           stepStyles[stepState]
         )}
       >
@@ -127,7 +127,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
               setStep((s) => s - 1)
             }, 350)
           }}
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 font-mono text-xs text-muted-foreground hover:text-foreground"
+          className="fixed bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 font-mono text-xs text-muted-foreground hover:text-foreground"
         >
           ← back
         </Button>

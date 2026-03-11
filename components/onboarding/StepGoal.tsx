@@ -38,12 +38,12 @@ const options: { value: Goal; label: string; detail: string }[] = [
 
 export function StepGoal({ name, onNext }: StepGoalProps) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       <div className="flex flex-col gap-2">
-        <p className="font-mono text-xs tracking-widest text-primary uppercase">
+        <p className="font-mono text-xs tracking-widest text-primary uppercase truncate">
           Good to know, {name}.
         </p>
-        <h2 className="font-mono text-2xl leading-snug font-bold text-foreground">
+        <h2 className="font-mono text-xl sm:text-2xl leading-tight font-bold text-foreground">
           Why are you here?
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
@@ -56,13 +56,13 @@ export function StepGoal({ name, onNext }: StepGoalProps) {
             key={o.value}
             variant="outline"
             onClick={() => onNext(o.value)}
-            className="h-auto w-full justify-start rounded-xl px-4 py-3.5 text-left"
+            className="h-auto w-full justify-start rounded-xl px-3 py-3 text-left"
           >
-            <div className="flex flex-col items-start gap-0.5">
-              <span className="font-mono text-sm text-foreground">
+            <div className="flex flex-col items-start gap-0.5 min-w-0">
+              <span className="font-mono text-sm text-foreground truncate">
                 {o.label}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground line-clamp-2">
                 {o.detail}
               </span>
             </div>
