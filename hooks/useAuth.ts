@@ -3,11 +3,12 @@
 // ─────────────────────────────────────────────
 // hooks/useAuth.ts
 // ─────────────────────────────────────────────
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
 import { pushProfileToSupabase } from "@/lib/storage/user"
 import { syncProgressFromSupabase } from "@/lib/storage/session"
+import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 
 export interface UseAuthReturn {
   user:                User | null
@@ -40,9 +41,7 @@ export function useAuth(): UseAuthReturn {
 
   // Post-auth sync — fires once when user transitions null → authenticated
   // Pushes locally saved profile + sessions up to Supabase
-  const prevUserRef = typeof window !== "undefined"
-    ? { current: null as string | null }
-    : { current: null as string | null }
+  const prevUserRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!user) {
@@ -56,8 +55,10 @@ export function useAuth(): UseAuthReturn {
     Promise.all([
       pushProfileToSupabase(),
       syncProgressFromSupabase(),
-    ]).catch(console.error)
-  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+    ])
+      .then(() => clearGuestSessionCount())
+      .catch(console.error)
+  }, [user])
 
   const signInWithGoogle = useCallback(async () => {
     await supabase.auth.signInWithOAuth({

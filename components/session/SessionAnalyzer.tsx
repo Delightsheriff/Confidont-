@@ -85,6 +85,70 @@ export default function SessionAnalyzer({
   const { fillerWordCount, detectedFillers, silenceDuration, isListening } =
     useAudioAnalysis(isActive, config)
 
+  // ── Waveform ─────────────────────────────────
+  const drawWaveform = useCallback(() => {
+    const canvas = canvasRef.current
+    const analyser = analyserRef.current
+    if (!canvas || !analyser) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const draw = () => {
+      waveAnimRef.current = requestAnimationFrame(draw)
+      analyser.getByteFrequencyData(dataArray)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const barWidth = (canvas.width / bufferLength) * 1.5
+      let x = 0
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height * 0.9
+        ctx.fillStyle = `rgba(81, 150, 150, ${0.4 + (dataArray[i] / 255) * 0.6})`
+        ctx.beginPath()
+        ctx.roundRect(
+          x,
+          (canvas.height - barHeight) / 2,
+          barWidth - 1,
+          barHeight,
+          2
+        )
+        ctx.fill()
+        x += barWidth + 1
+      }
+    }
+    draw()
+  }, [])
+
+  const stopWaveform = useCallback(() => {
+    if (waveAnimRef.current !== undefined) {
+      cancelAnimationFrame(waveAnimRef.current)
+      waveAnimRef.current = undefined
+    }
+    const canvas = canvasRef.current
+    if (canvas)
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
+  }, [])
+
+  const setupWaveform = useCallback(
+    (stream: MediaStream) => {
+      try {
+        const audioCtx = new AudioContext()
+        const source = audioCtx.createMediaStreamSource(stream)
+        const analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 128
+        source.connect(analyser)
+        analyserRef.current = analyser
+        drawWaveform()
+      } catch (err) {
+        console.warn("Web Audio API unavailable:", err)
+      }
+    },
+    [drawWaveform]
+  )
+
   // ── Camera helpers ───────────────────────────
   const startCamera = useCallback(async (): Promise<MediaStream | null> => {
     setCameraError(null)
@@ -109,7 +173,7 @@ export default function SessionAnalyzer({
     }
     analyserRef.current = null
     stopWaveform()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stopWaveform])
 
   // ── Topic timer ──────────────────────────────
   const startTopicTimer = useCallback(() => {
@@ -170,13 +234,14 @@ export default function SessionAnalyzer({
   }, [
     startCamera,
     startTopicTimer,
+    setupWaveform,
     userName,
     goal,
     phase,
     weakAreas,
     completedTopics,
     totalSessions,
-  ]) // eslint-disable-line react-hooks/exhaustive-deps
+  ])
 
   // ── Next topic ───────────────────────────────
   const nextTopic = useCallback(() => {
@@ -227,68 +292,7 @@ export default function SessionAnalyzer({
       stopCamera()
       stopWaveform()
     }
-  }, [stopTopicTimer, stopCamera]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Waveform ─────────────────────────────────
-  const setupWaveform = useCallback((stream: MediaStream) => {
-    try {
-      const audioCtx = new AudioContext()
-      const source = audioCtx.createMediaStreamSource(stream)
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 128
-      source.connect(analyser)
-      analyserRef.current = analyser
-      drawWaveform()
-    } catch (err) {
-      console.warn("Web Audio API unavailable:", err)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const drawWaveform = useCallback(() => {
-    const canvas = canvasRef.current
-    const analyser = analyserRef.current
-    if (!canvas || !analyser) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-
-    const draw = () => {
-      waveAnimRef.current = requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-      const barWidth = (canvas.width / bufferLength) * 1.5
-      let x = 0
-
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height * 0.9
-        ctx.fillStyle = `rgba(81, 150, 150, ${0.4 + (dataArray[i] / 255) * 0.6})`
-        ctx.beginPath()
-        ctx.roundRect(
-          x,
-          (canvas.height - barHeight) / 2,
-          barWidth - 1,
-          barHeight,
-          2
-        )
-        ctx.fill()
-        x += barWidth + 1
-      }
-    }
-    draw()
-  }, [])
-
-  const stopWaveform = useCallback(() => {
-    if (waveAnimRef.current !== undefined) {
-      cancelAnimationFrame(waveAnimRef.current)
-      waveAnimRef.current = undefined
-    }
-    const canvas = canvasRef.current
-    if (canvas)
-      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
-  }, [])
+  }, [stopTopicTimer, stopCamera, stopWaveform])
 
   // ── Render ───────────────────────────────────
   return (
@@ -324,7 +328,7 @@ export default function SessionAnalyzer({
         />
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-card via-card/60 to-transparent" />
 
         {/* ── Idle state ── */}
         {sessionState === "idle" && (
@@ -546,58 +550,72 @@ export default function SessionAnalyzer({
       )}
 
       {/* ── Controls ───────────────────────────── */}
-      <div className="flex items-center gap-3">
-        {/* Restart — visible during active session */}
-        {sessionState === "active" && (
-          <button
-            onClick={restartSession}
-            className="rounded-full border border-border px-6 py-3 font-mono text-sm text-muted-foreground transition-all hover:border-foreground/30"
-          >
-            Restart
-          </button>
-        )}
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center gap-3">
+          {/* Restart — visible during active session */}
+          {sessionState === "active" && (
+            <button
+              onClick={restartSession}
+              className="rounded-full border border-border px-6 py-3 font-mono text-sm text-muted-foreground transition-all hover:border-foreground/30"
+            >
+              Restart
+            </button>
+          )}
 
-        {/* Main CTA */}
-        {sessionState === "idle" && (
-          <button
-            onClick={startSession}
-            disabled={!isReady}
-            className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
-              !isReady
-                ? "cursor-not-allowed bg-muted text-muted-foreground"
-                : "bg-primary text-primary-foreground hover:opacity-90"
-            }`}
-          >
-            {isReady ? "Start Session" : "Loading AI..."}
-          </button>
-        )}
+          {/* Main CTA */}
+          {sessionState === "idle" && (
+            <button
+              onClick={startSession}
+              disabled={!isReady}
+              className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
+                !isReady
+                  ? "cursor-not-allowed bg-muted text-muted-foreground"
+                  : "bg-primary text-primary-foreground hover:opacity-90"
+              }`}
+            >
+              {isReady ? "Start Session" : "Loading AI..."}
+            </button>
+          )}
 
-        {sessionState === "loading-topics" && (
-          <button
-            disabled
-            className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
-          >
-            Preparing...
-          </button>
-        )}
+          {sessionState === "loading-topics" && (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+            >
+              Preparing...
+            </button>
+          )}
 
-        {/* Next Topic — appears after 30s minimum */}
-        {sessionState === "active" && canAdvance && (
-          <button
-            onClick={nextTopic}
-            className="animate-in rounded-full bg-primary px-10 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 fade-in slide-in-from-bottom-1 hover:opacity-90"
-          >
-            {topicIndex < topics.length - 1 ? "Next Topic →" : "Finish Session"}
-          </button>
-        )}
+          {/* Next Topic — appears after 30s minimum */}
+          {sessionState === "active" && canAdvance && (
+            <button
+              onClick={nextTopic}
+              className="animate-in rounded-full bg-primary px-10 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 fade-in slide-in-from-bottom-1 hover:opacity-90"
+            >
+              {topicIndex < topics.length - 1
+                ? "Next Topic →"
+                : "Finish Session"}
+            </button>
+          )}
 
-        {/* Waiting for minimum time */}
-        {sessionState === "active" && !canAdvance && (
+          {/* Waiting for minimum time */}
+          {sessionState === "active" && !canAdvance && (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+            >
+              Keep going...
+            </button>
+          )}
+        </div>
+
+        {/* ← back — visible on idle state only */}
+        {sessionState === "idle" && onBack && (
           <button
-            disabled
-            className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+            onClick={onBack}
+            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            Keep going...
+            ← back
           </button>
         )}
       </div>

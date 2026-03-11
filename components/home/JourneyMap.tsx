@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { getProfile } from "@/lib/storage/user"
 import { getProgress } from "@/lib/storage/session"
 import { getDailyStatus } from "@/lib/logic/dailyLimit"
+import { useAuth } from "@/hooks/useAuth"
+import AuthModal from "@/components/auth/AuthModal"
 import { PERSONAS } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
@@ -77,11 +79,18 @@ const PHASES = [
 
 export default function JourneyMap() {
   const router = useRouter()
+  const { user } = useAuth()
   const profile = getProfile()
   const progress = getProgress()
 
   const [toast, setToast] = useState<string | null>(null)
   const [showDayNudge, setShowDayNudge] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+
+  const fireToast = useCallback((msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2000)
+  }, [])
 
   if (!profile) {
     router.replace("/onboarding")
@@ -96,11 +105,6 @@ export default function JourneyMap() {
     PHASES.findLast(
       (p) => p.startsAt <= Math.max(progress.totalSessions + 1, 1)
     ) ?? PHASES[0]
-
-  const fireToast = useCallback((msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2000)
-  }, [])
 
   const handleCardTap = (card: SessionCardData) => {
     switch (card.state) {
@@ -132,16 +136,27 @@ export default function JourneyMap() {
           <h1 className="font-mono text-lg font-bold text-primary">
             Confidont
           </h1>
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => !user && setShowAuthModal(true)}
+            className="flex items-center gap-2"
+          >
             <div
               className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
             >
-              {persona.name[0]}
+              {user
+                ? (profile.name[0]?.toUpperCase() ?? persona.name[0])
+                : persona.name[0]}
             </div>
-            <span className="font-mono text-xs text-muted-foreground">
-              {persona.name}
-            </span>
-          </div>
+            {user ? (
+              <span className="font-mono text-xs text-muted-foreground">
+                {profile.name}
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-[10px] font-bold text-primary transition-colors hover:bg-primary/20">
+                sign in
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -185,7 +200,7 @@ export default function JourneyMap() {
 
         {/* Session path */}
         <div className="relative space-y-3">
-          <div className="absolute top-8 bottom-8 left-[27px] -z-0 w-px bg-border" />
+          <div className="absolute top-8 bottom-8 left-6.75 z-0 w-px bg-border" />
 
           {cards.map((card, i) => {
             const isPhaseStart = PHASES.some(
@@ -204,11 +219,11 @@ export default function JourneyMap() {
           })}
 
           <div className="flex items-center gap-3 pt-2 pl-2">
-            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-border">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border">
               <span className="text-xs text-muted-foreground/40">∞</span>
             </div>
             <p className="font-mono text-xs text-muted-foreground/40">
-              The journey doesn't end here.
+              The journey doesn&apos;t end here.
             </p>
           </div>
         </div>
@@ -241,6 +256,15 @@ export default function JourneyMap() {
           {toast}
         </div>
       )}
+
+      {/* Auth modal — guest sign in */}
+      {showAuthModal && (
+        <AuthModal
+          context="general"
+          onDismiss={() => setShowAuthModal(false)}
+          onSuccess={() => setShowAuthModal(false)}
+        />
+      )}
     </div>
   )
 }
@@ -267,7 +291,7 @@ function SessionCard({
   return (
     <div className="flex items-start gap-4">
       {/* Node */}
-      <div className="z-10 mt-4 flex-shrink-0">
+      <div className="z-10 mt-4 shrink-0">
         <NodeIcon state={card.state} />
       </div>
 
@@ -362,24 +386,24 @@ function CardAction({ card }: { card: SessionCardData }) {
   switch (card.state) {
     case "available":
       return (
-        <span className="flex-shrink-0 rounded-full bg-primary px-4 py-1.5 font-mono text-xs font-bold text-primary-foreground">
+        <span className="shrink-0 rounded-full bg-primary px-4 py-1.5 font-mono text-xs font-bold text-primary-foreground">
           Start →
         </span>
       )
     case "available-at-limit":
       return (
-        <span className="flex-shrink-0 rounded-full border border-primary/50 px-4 py-1.5 font-mono text-xs font-bold text-primary">
+        <span className="shrink-0 rounded-full border border-primary/50 px-4 py-1.5 font-mono text-xs font-bold text-primary">
           Start →
         </span>
       )
     case "completed":
       return card.date ? (
-        <p className="flex-shrink-0 font-mono text-[10px] text-muted-foreground/40">
+        <p className="shrink-0 font-mono text-[10px] text-muted-foreground/40">
           {formatDate(card.date)}
         </p>
       ) : null
     case "locked-premium":
-      return <LockIcon className="flex-shrink-0 text-muted-foreground/30" />
+      return <LockIcon className="shrink-0 text-muted-foreground/30" />
     default:
       return null
   }
@@ -466,11 +490,11 @@ function DayNudgeModal({
         <div className="mx-auto h-1 w-8 rounded-full bg-border" />
         <div className="space-y-1.5">
           <p className="font-mono text-base font-bold text-foreground">
-            That's your {limitForToday} for today.
+            That&apos;s your {limitForToday} for today.
           </p>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {personaName} will be here {nextUnlockDate}. But if you want to keep
-            going — you've earned it.
+            going - you&apos;ve earned it.
           </p>
         </div>
         <div className="space-y-2">
