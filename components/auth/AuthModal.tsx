@@ -40,11 +40,6 @@ export default function AuthModal({
 
   const handleGoogle = async () => {
     setModalState("loading")
-    // Google OAuth redirects — afterAuth runs on return via /auth/callback
-    // Store intent so callback can trigger sync
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("confidont_post_auth_sync", "true")
-    }
     await signInWithGoogle()
   }
 

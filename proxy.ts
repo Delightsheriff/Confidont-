@@ -1,10 +1,8 @@
 // ─────────────────────────────────────────────
-// proxy.ts  (Next.js middleware equivalent)
+// proxy.ts  (Next.js 16 request proxy)
 //
 // Runs on every request. Refreshes the Supabase
 // auth session so tokens don't expire mid-visit.
-//
-// Place this file at: src/proxy.ts
 // ─────────────────────────────────────────────
 import { type NextRequest } from "next/server"
 import { updateSession } from "./lib/supabase/proxy"

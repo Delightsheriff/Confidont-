@@ -4,6 +4,10 @@
 // Handles OAuth + magic link redirects.
 // Uses server client — cookies() is async in Next.js 15+.
 // Uses getClaims() not getSession() per Supabase SSR docs.
+//
+// This route ONLY exchanges the code for a session and
+// redirects. All profile/progress routing is handled
+// client-side by /home (which checks localStorage + Supabase).
 // ─────────────────────────────────────────────
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
@@ -38,15 +42,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/error`)
   }
 
-  const userId = data.claims.sub
-
-  // New user? Send to onboarding
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", userId)
-    .single()
-
-  const destination = profile ? next : "/onboarding"
-  return NextResponse.redirect(`${origin}${destination}`)
+  // Session established — redirect to app
+  // /home handles profile check (localStorage → Supabase → onboarding)
+  return NextResponse.redirect(`${origin}${next}`)
 }
+

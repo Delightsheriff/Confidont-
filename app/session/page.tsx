@@ -16,14 +16,19 @@ export default function SessionPage() {
   const router = useRouter()
   const progress = getProgress()
   const profile = getProfile()
-  const persona = profile
-    ? (PERSONAS.find((p) => p.id === profile.personaId) ?? PERSONAS[0])
-    : PERSONAS[0]
-  const userName = profile?.name ?? "there"
-  const goal = profile?.goal ?? "general comfort"
 
   const [pageState, setPageState] = useState<PageState>("session")
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null)
+
+  // Guard: no profile → needs onboarding first
+  if (!profile) {
+    router.replace("/onboarding")
+    return null
+  }
+
+  const persona = PERSONAS.find((p) => p.id === profile.personaId) ?? PERSONAS[0]
+  const userName = profile.name
+  const goal = profile.goal
 
   const handleSessionComplete = (result: SessionResult) => {
     setSessionResult(result)
