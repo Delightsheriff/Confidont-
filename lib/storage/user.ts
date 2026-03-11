@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────
 // lib/storage/user.ts
 //
-// Profile persistence — localStorage cache + Supabase.
+// Profile persistence.
 //
-// saveProfile()           — write on onboarding complete
+// saveProfile()           — onboarding complete → localStorage only
+// pushProfileToSupabase() — called post-auth → Supabase upsert
+// getProfileFromSupabase()— new device / cleared browser recovery
 // getProfile()            — fast sync read, localStorage only
-// getProfileFromSupabase()— full read for new device / cleared browser
 // hasCompletedOnboarding()— gate check
 // clearProfile()          — dev/testing only
 // ─────────────────────────────────────────────
@@ -13,62 +14,62 @@
 import type { UserProfile, OnboardingAnswers } from "@/types/user"
 import { createClient } from "@/lib/supabase/client"
 
-const PROFILE_KEY = "confidont_profile"
+const PROFILE_KEY = "confidont_profile_v1"
 
-export async function saveProfile(
-  answers: OnboardingAnswers
-): Promise<{ profile: UserProfile; supabaseSaved: boolean }> {
+// ── Called at end of onboarding ───────────────
+// localStorage only — user has no account yet
+export function saveProfile(answers: OnboardingAnswers): UserProfile {
   const profile: UserProfile = {
     ...answers,
     completedAt: new Date().toISOString(),
   }
-
-  // Always write localStorage first — never blocks
   if (typeof window !== "undefined") {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
   }
-
-  // Upsert to Supabase if authenticated
-  let supabaseSaved = false
-  try {
-    const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (user) {
-      const { error } = await supabase.from("profiles").upsert({
-        id: user.id,
-        name: answers.name,
-        pronouns: answers.pronouns,
-        goal: answers.goal,
-        camera_confidence: answers.cameraConfidence,
-        sessions_per_day: answers.sessionsPerDay,
-        persona_id: answers.personaId,
-        completed_at: profile.completedAt,
-      })
-
-      if (error) {
-        console.error("[saveProfile] Supabase upsert error:", error.message)
-      } else {
-        supabaseSaved = true
-      }
-    }
-  } catch (err) {
-    console.error("[saveProfile] Unexpected error:", err)
-  }
-
-  return { profile, supabaseSaved }
+  return profile
 }
 
-// Full read from Supabase — call on app load when authenticated
-// but local cache is empty (new device, cleared browser)
+// ── Called post-auth (after sign-in) ──────────
+// Pushes locally saved profile up to Supabase
+// Called from useAuth after user transitions null → authenticated
+export async function pushProfileToSupabase(): Promise<boolean> {
+  const profile = getProfile()
+  if (!profile) return false
+
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { error } = await supabase.from("profiles").upsert({
+      id:                user.id,
+      name:              profile.name,
+      pronouns:          profile.pronouns,
+      goal:              profile.goal,
+      camera_confidence: profile.cameraConfidence,
+      sessions_per_day:  profile.sessionsPerDay,
+      persona_id:        profile.personaId,
+      completed_at:      profile.completedAt,
+    })
+
+    if (error) {
+      console.error("[pushProfileToSupabase] error:", error.message)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error("[pushProfileToSupabase] unexpected error:", err)
+    return false
+  }
+}
+
+// ── Called on home load for new device ────────
+// Authenticated but no local profile — pull from Supabase
 export async function getProfileFromSupabase(): Promise<UserProfile | null> {
   try {
     const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
     const { data, error } = await supabase
@@ -80,13 +81,13 @@ export async function getProfileFromSupabase(): Promise<UserProfile | null> {
     if (error || !data) return null
 
     const profile: UserProfile = {
-      name: data.name,
-      pronouns: data.pronouns,
-      goal: data.goal,
+      name:             data.name,
+      pronouns:         data.pronouns,
+      goal:             data.goal,
       cameraConfidence: data.camera_confidence,
-      sessionsPerDay: data.sessions_per_day,
-      personaId: data.persona_id,
-      completedAt: data.completed_at,
+      sessionsPerDay:   data.sessions_per_day,
+      personaId:        data.persona_id,
+      completedAt:      data.completed_at,
     }
 
     // Hydrate local cache
@@ -98,7 +99,7 @@ export async function getProfileFromSupabase(): Promise<UserProfile | null> {
   }
 }
 
-// Fast sync read — localStorage only
+// ── Fast sync read ─────────────────────────────
 export function getProfile(): UserProfile | null {
   if (typeof window === "undefined") return null
   try {

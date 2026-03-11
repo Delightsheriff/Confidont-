@@ -45,7 +45,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
     if (step === TOTAL_STEPS) {
       setSaving(true)
-      await saveProfile(updated as OnboardingAnswers)
+      saveProfile(updated as OnboardingAnswers)
       setSaving(false)
       setStepState("exiting")
       setTimeout(onComplete, 400)
