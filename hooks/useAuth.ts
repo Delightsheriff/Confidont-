@@ -3,11 +3,11 @@
 // ─────────────────────────────────────────────
 // hooks/useAuth.ts
 // ─────────────────────────────────────────────
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
-import { pushProfileToSupabase } from "@/lib/storage/user"
-import { syncProgressFromSupabase } from "@/lib/storage/session"
+import { pushProfileToSupabase, clearProfile } from "@/lib/storage/user"
+import { syncProgressFromSupabase, clearProgress } from "@/lib/storage/session"
 import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 
 export interface UseAuthReturn {
@@ -21,7 +21,7 @@ export interface UseAuthReturn {
 export function useAuth(): UseAuthReturn {
   const [user,      setUser]      = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -37,7 +37,7 @@ export function useAuth(): UseAuthReturn {
     )
 
     return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase])
 
   // Post-auth sync — fires once when user transitions null → authenticated
   // Pushes locally saved profile + sessions up to Supabase
@@ -77,7 +77,12 @@ export function useAuth(): UseAuthReturn {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
+    // Clear all local data on sign-out
+    clearProfile()
+    clearProgress()
+    clearGuestSessionCount()
   }, [supabase])
 
   return { user, isLoading, signInWithGoogle, signInWithMagicLink, signOut }
 }
+

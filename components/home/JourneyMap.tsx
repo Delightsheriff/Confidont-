@@ -144,12 +144,14 @@ export default function JourneyMap() {
               className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
             >
               {user
-                ? (profile.name[0]?.toUpperCase() ?? persona.name[0])
+                ? (user.user_metadata?.full_name?.[0]?.toUpperCase() ??
+                    profile.name[0]?.toUpperCase() ??
+                    persona.name[0])
                 : persona.name[0]}
             </div>
             {user ? (
               <span className="font-mono text-xs text-muted-foreground">
-                {profile.name}
+                {user.user_metadata?.full_name ?? profile.name}
               </span>
             ) : (
               <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-[10px] font-bold text-primary transition-colors hover:bg-primary/20">

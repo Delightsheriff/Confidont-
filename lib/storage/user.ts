@@ -42,14 +42,15 @@ export async function pushProfileToSupabase(): Promise<boolean> {
     if (!user) return false
 
     const { error } = await supabase.from("profiles").upsert({
-      id:                user.id,
-      name:              profile.name,
-      pronouns:          profile.pronouns,
-      goal:              profile.goal,
-      camera_confidence: profile.cameraConfidence,
-      sessions_per_day:  profile.sessionsPerDay,
-      persona_id:        profile.personaId,
-      completed_at:      profile.completedAt,
+      id:                  user.id,
+      name:                profile.name,
+      pronouns:            profile.pronouns,
+      goal:                profile.goal,
+      camera_confidence:   profile.cameraConfidence,
+      success_definition:  goalToSuccessDefinition(profile.goal),
+      sessions_per_day:    profile.sessionsPerDay,
+      persona_id:          profile.personaId,
+      completed_at:        profile.completedAt,
     })
 
     if (error) {
@@ -62,6 +63,18 @@ export async function pushProfileToSupabase(): Promise<boolean> {
     console.error("[pushProfileToSupabase] unexpected error:", err)
     return false
   }
+}
+
+// Map goal → success_definition for Supabase NOT NULL column
+function goalToSuccessDefinition(goal: string): string {
+  const map: Record<string, string> = {
+    "job-interviews": "Feel confident and prepared in video interviews",
+    "presentations": "Deliver presentations naturally on camera",
+    "video-calls": "Be comfortable and engaged on video calls",
+    "content-creation": "Show up authentically on camera for content",
+    "general-comfort": "Feel at ease whenever the camera is on",
+  }
+  return map[goal] ?? "Build confidence on camera"
 }
 
 // ── Called on home load for new device ────────

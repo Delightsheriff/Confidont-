@@ -7,7 +7,6 @@ import {
   hasCompletedOnboarding,
   getProfileFromSupabase,
 } from "@/lib/storage/user"
-import { syncProgressFromSupabase } from "@/lib/storage/session"
 import { useAuth } from "@/hooks/useAuth"
 
 // ─────────────────────────────────────────────
@@ -37,17 +36,16 @@ export default function HomePage() {
     const init = async () => {
       // Has local profile — fast path
       if (hasCompletedOnboarding()) {
-        if (user) syncProgressFromSupabase()
         setReady(true)
         return
       }
 
       // No local profile — check Supabase if authenticated
+      // (new device / cleared browser scenario)
       if (user) {
         const profile = await getProfileFromSupabase()
         if (profile) {
           // Found on Supabase — hydrated into localStorage by getProfileFromSupabase
-          syncProgressFromSupabase()
           setReady(true)
           return
         }
