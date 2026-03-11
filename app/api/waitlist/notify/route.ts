@@ -17,7 +17,7 @@ import { NextResponse } from "next/server"
 import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM   = "Confidont <onboarding@resend.dev>"
+const FROM = "Confidont <onboarding@resend.dev>"
 
 // ── In-memory rate limiter ────────────────────
 // { ip → { count, resetAt } }
@@ -25,13 +25,13 @@ const FROM   = "Confidont <onboarding@resend.dev>"
 // Good enough for beta on a single instance.
 // Swap for Upstash Redis when you scale.
 
-const LIMIT     = 3
+const LIMIT = 3
 const WINDOW_MS = 60 * 60 * 1000 // 1 hour
 
 const ipMap = new Map<string, { count: number; resetAt: number }>()
 
 function isRateLimited(ip: string): boolean {
-  const now    = Date.now()
+  const now = Date.now()
   const record = ipMap.get(ip)
 
   if (!record || now > record.resetAt) {
@@ -50,13 +50,28 @@ function isRateLimited(ip: string): boolean {
 // Not exhaustive — good enough for beta.
 
 const BLOCKED_DOMAINS = new Set([
-  "mailinator.com", "guerrillamail.com", "tempmail.com",
-  "throwaway.email", "yopmail.com", "sharklasers.com",
-  "guerrillamailblock.com", "grr.la", "guerrillamail.info",
-  "spam4.me", "trashmail.com", "trashmail.me", "trashmail.net",
-  "dispostable.com", "maildrop.cc", "spamgourmet.com",
-  "10minutemail.com", "minutemail.com", "discard.email",
-  "fakeinbox.com", "mailnull.com", "spamherelots.com",
+  "mailinator.com",
+  "guerrillamail.com",
+  "tempmail.com",
+  "throwaway.email",
+  "yopmail.com",
+  "sharklasers.com",
+  "guerrillamailblock.com",
+  "grr.la",
+  "guerrillamail.info",
+  "spam4.me",
+  "trashmail.com",
+  "trashmail.me",
+  "trashmail.net",
+  "dispostable.com",
+  "maildrop.cc",
+  "spamgourmet.com",
+  "10minutemail.com",
+  "minutemail.com",
+  "discard.email",
+  "fakeinbox.com",
+  "mailnull.com",
+  "spamherelots.com",
 ])
 
 function isDisposable(email: string): boolean {
@@ -76,23 +91,16 @@ export async function POST(request: Request) {
 
     // Rate limit check
     if (isRateLimited(ip)) {
-      return NextResponse.json(
-        { error: "Too many requests" },
-        { status: 429 }
-      )
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 })
     }
 
     const body = await request.json().catch(() => null)
-    const email = typeof body?.email === "string"
-      ? body.email.toLowerCase().trim()
-      : null
+    const email =
+      typeof body?.email === "string" ? body.email.toLowerCase().trim() : null
 
     // Basic validation
     if (!email || !isValidEmail(email)) {
-      return NextResponse.json(
-        { error: "Invalid email" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 })
     }
 
     // Disposable email check
@@ -108,14 +116,14 @@ export async function POST(request: Request) {
 
     // Send emails in parallel — neither failing breaks the other
     console.log("[notify] Sending emails for:", email)
-    
+
     const notifyEmail = process.env.WAITLIST_NOTIFY_EMAIL
     const sends = [confirmationEmail(email)]
     if (notifyEmail) sends.push(notificationEmail(email, notifyEmail))
 
     const results = await Promise.allSettled(sends)
-    
-    results.forEach((result, i) => {
+
+    results.forEach((result) => {
       if (result.status === "rejected") {
         console.error("[notify] Email send failed:", result.reason)
       }
@@ -132,7 +140,7 @@ export async function POST(request: Request) {
 
 async function confirmationEmail(to: string) {
   return resend.emails.send({
-    from:    FROM,
+    from: FROM,
     to,
     subject: "You're on the Confidont waitlist 🎉",
     html: `
@@ -180,8 +188,8 @@ async function confirmationEmail(to: string) {
 
 async function notificationEmail(joinedEmail: string, notifyEmail: string) {
   return resend.emails.send({
-    from:    FROM,
-    to:      notifyEmail,
+    from: FROM,
+    to: notifyEmail,
     subject: `New waitlist signup: ${joinedEmail}`,
     html: `
       <body style="font-family:'Courier New',monospace;background:#0a0a0a;padding:32px;color:#f5f5f5;">

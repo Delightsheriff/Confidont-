@@ -4,27 +4,26 @@ import { useState, useEffect, useRef } from "react"
 import { PERSONAS } from "@/types/user"
 import { saveProfile } from "@/lib/storage/user"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import type {
   OnboardingAnswers,
   Pronoun,
   Goal,
   CameraConfidence,
-  SuccessDefinition,
   SessionsPerDay,
   Persona,
 } from "@/types/user"
 
 // ─────────────────────────────────────────────
-// Onboarding
+// Onboarding — 6 steps
 //
-// 6 steps — each fades in/out independently.
-// Step 1-5: questions. Step 6: persona selection.
-// Progress dots at bottom — no step numbers shown.
-//
-// On complete: saves profile to storage,
-// calls onComplete to navigate to home.
+// Changes from original:
+// - successDefinition removed (was never asked, hardcoded)
+// - saveProfile() is awaited — was called without await
+// - Saving state on final step — shows spinner while
+//   Supabase upsert runs, doesn't just fire and forget
+// - If Supabase save fails, profile is still in localStorage
+//   and onComplete fires — user is never blocked
 // ─────────────────────────────────────────────
 
 const TOTAL_STEPS = 6
@@ -39,36 +38,42 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState(1)
   const [stepState, setStepState] = useState<StepState>("entering")
   const [answers, setAnswers] = useState<Partial<OnboardingAnswers>>({})
+  const [saving, setSaving] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
-  // Focus name input on step 1
   useEffect(() => {
     if (step === 1 && nameInputRef.current) {
       setTimeout(() => nameInputRef.current?.focus(), 400)
     }
   }, [step])
 
-  // Fade in on mount and on step change
   useEffect(() => {
-    setStepState("entering")
     const t = setTimeout(() => setStepState("visible"), 50)
     return () => clearTimeout(t)
   }, [step])
 
-  const advance = (update: Partial<OnboardingAnswers>) => {
+  const advance = async (update: Partial<OnboardingAnswers>) => {
     const updated = { ...answers, ...update }
     setAnswers(updated)
 
     if (step === TOTAL_STEPS) {
-      // Save and complete
-      saveProfile(updated as OnboardingAnswers)
+      setSaving(true)
+
+      // saveProfile always writes localStorage first (sync)
+      // Supabase upsert runs after — failure never blocks user
+      await saveProfile(updated as OnboardingAnswers)
+
+      setSaving(false)
       setStepState("exiting")
       setTimeout(onComplete, 400)
       return
     }
 
     setStepState("exiting")
-    setTimeout(() => setStep((s) => s + 1), 350)
+    setTimeout(() => {
+      setStepState("entering")
+      setStep((s) => s + 1)
+    }, 350)
   }
 
   const stepStyles = {
@@ -137,23 +142,22 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         {step === 6 && (
           <StepPersona
             name={answers.name ?? ""}
-            onNext={(personaId) =>
-              advance({
-                personaId,
-                successDefinition: "feel-natural-on-calls", // default — not a question we ask
-              })
-            }
+            saving={saving}
+            onNext={(personaId) => advance({ personaId })}
           />
         )}
       </div>
 
-      {/* Back button — not on step 1 */}
-      {step > 1 && stepState === "visible" && (
+      {/* Back button */}
+      {step > 1 && stepState === "visible" && !saving && (
         <Button
           variant="ghost"
           onClick={() => {
             setStepState("exiting")
-            setTimeout(() => setStep((s) => s - 1), 350)
+            setTimeout(() => {
+              setStepState("entering")
+              setStep((s) => s - 1)
+            }, 350)
           }}
           className="fixed bottom-8 left-1/2 -translate-x-1/2 font-mono text-xs text-muted-foreground hover:text-foreground"
         >
@@ -168,8 +172,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 // Steps
 // ─────────────────────────────────────────────
 
-// ── Step 1: Name ─────────────────────────────
-
 function StepName({
   initial,
   onNext,
@@ -180,7 +182,6 @@ function StepName({
   inputRef: React.RefObject<HTMLInputElement | null>
 }) {
   const [value, setValue] = useState(initial)
-
   const submit = () => {
     const trimmed = value.trim()
     if (trimmed.length < 1) return
@@ -207,8 +208,6 @@ function StepName({
   )
 }
 
-// ── Step 2: Pronouns ──────────────────────────
-
 function StepPronouns({
   name,
   onNext,
@@ -233,8 +232,6 @@ function StepPronouns({
     </StepShell>
   )
 }
-
-// ── Step 3: Goal ──────────────────────────────
 
 function StepGoal({
   name,
@@ -295,8 +292,6 @@ function StepGoal({
   )
 }
 
-// ── Step 4: Camera confidence ─────────────────
-
 function StepCameraConfidence({
   name,
   onNext,
@@ -318,7 +313,7 @@ function StepCameraConfidence({
       },
       {
         value: "manage-want-to-improve",
-        label: "I manage, but want to be better",
+        label: "I manage, but want to improve",
         detail: "I get through it — just not with confidence.",
       },
     ]
@@ -347,8 +342,6 @@ function StepCameraConfidence({
   )
 }
 
-// ── Step 5: Sessions per day ──────────────────
-
 function StepSessionsPerDay({
   name,
   onNext,
@@ -376,13 +369,13 @@ function StepSessionsPerDay({
   )
 }
 
-// ── Step 6: Persona selection ─────────────────
-
 function StepPersona({
   name,
+  saving,
   onNext,
 }: {
   name: string
+  saving: boolean
   onNext: (personaId: string) => void
 }) {
   const [selected, setSelected] = useState<string | null>(null)
@@ -405,9 +398,10 @@ function StepPersona({
       </div>
 
       <ContinueButton
-        label="Let's go →"
+        label={saving ? "Setting things up..." : "Let's go →"}
         onClick={() => selected && onNext(selected)}
-        disabled={!selected}
+        disabled={!selected || saving}
+        loading={saving}
       />
     </StepShell>
   )
@@ -494,7 +488,6 @@ function PersonaCard({
           : "border-border hover:border-primary/40 hover:bg-primary/5"
       )}
     >
-      {/* Avatar placeholder */}
       <div
         className={cn(
           "flex size-10 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold text-white",
@@ -519,7 +512,6 @@ function PersonaCard({
         </p>
       </div>
 
-      {/* Selection indicator */}
       <div
         className={cn(
           "mt-1 size-4 shrink-0 rounded-full border-2 transition-all",
@@ -533,10 +525,12 @@ function PersonaCard({
 function ContinueButton({
   onClick,
   disabled,
+  loading,
   label = "Continue →",
 }: {
   onClick: () => void
   disabled?: boolean
+  loading?: boolean
   label?: string
 }) {
   return (
@@ -546,6 +540,9 @@ function ContinueButton({
       size="lg"
       className="w-full rounded-full font-mono"
     >
+      {loading && (
+        <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      )}
       {label}
     </Button>
   )
