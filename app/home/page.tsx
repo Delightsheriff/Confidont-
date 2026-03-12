@@ -27,11 +27,11 @@ import { useAuth } from "@/hooks/useAuth"
 
 export default function HomePage() {
   const router = useRouter()
-  const { user, isLoading } = useAuth()
+  const { user, isInitialized } = useAuth()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    if (isLoading) return
+    if (!isInitialized) return
 
     const init = async () => {
       // Has local profile — fast path
@@ -56,9 +56,10 @@ export default function HomePage() {
     }
 
     init()
-  }, [user, isLoading, router])
+  }, [user, isInitialized, router])
 
-  if (!ready) {
+  // Show loading while checking auth (should be instant with SSR)
+  if (!isInitialized || !ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />

@@ -65,31 +65,27 @@ const WHO_IT_FOR = [
 
 export default function LandingPage() {
   const router = useRouter()
-  const { user, isLoading: authLoading } = useAuth()
+  const { user, isInitialized } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
 
   useEffect(() => {
-    if (authLoading) return
+    if (!isInitialized) return
     
-    const init = async () => {
-      // Already authenticated with profile → go to home
-      if (hasCompletedOnboarding()) {
-        router.replace("/home")
-        return
-      }
-      
-      // Already authenticated but no local profile → recover from Supabase
-      if (user) {
-        router.replace("/home")
-        return
-      }
-      
-      // Not authenticated, no local profile → stay on landing
-      // User will choose "Try it free" or "I already have an account"
+    // Already authenticated with profile → go to home
+    if (hasCompletedOnboarding()) {
+      router.replace("/home")
+      return
     }
     
-    init()
-  }, [user, authLoading, router])
+    // Already authenticated but no local profile → recover from Supabase
+    if (user) {
+      router.replace("/home")
+      return
+    }
+    
+    // Not authenticated, no local profile → stay on landing
+    // User will choose "Try it free" or "I already have an account"
+  }, [user, isInitialized, router])
 
   const handleTryIt = () => {
     router.push("/onboarding")
@@ -105,12 +101,18 @@ export default function LandingPage() {
     router.push("/home")
   }
 
-  if (authLoading) {
+  // Show loading only while checking auth (rare with SSR)
+  if (!isInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
+  }
+
+  // Don't render anything while redirecting (prevents flash)
+  if (user || hasCompletedOnboarding()) {
+    return null
   }
 
   return (
