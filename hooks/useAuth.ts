@@ -41,6 +41,7 @@ export function useAuth(): UseAuthReturn {
 
   // Post-auth sync — fires once when user transitions null → authenticated
   // Pushes locally saved profile + sessions up to Supabase
+  // NOTE: Only PUSHES data, does not pull. Pulling is handled by /home
   const prevUserRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -52,10 +53,9 @@ export function useAuth(): UseAuthReturn {
     if (prevUserRef.current === user.id) return
     prevUserRef.current = user.id
 
-    Promise.all([
-      pushProfileToSupabase(),
-      syncProgressFromSupabase(),
-    ])
+    // Push local data to Supabase (upload)
+    pushProfileToSupabase()
+      .then(() => syncProgressFromSupabase()) // Also triggers the pull from server
       .then(() => clearGuestSessionCount())
       .catch(console.error)
   }, [user])

@@ -121,7 +121,10 @@ export default function JourneyMap() {
         fireToast("Unlock premium to access this session")
         break
       case "free-cap-reached":
-        // tapping does nothing — upgrade card is below
+        // Guest user - prompt to sign in to continue
+        if (!user) {
+          setShowAuthModal(true)
+        }
         break
       default:
         break
@@ -232,7 +235,11 @@ export default function JourneyMap() {
 
         {/* Upgrade card — only shown when free cap is reached */}
         {daily.isFreeCapReached && (
-          <UpgradeCard personaName={persona.name} userName={profile.name} />
+          <UpgradeCard 
+            personaName={persona.name} 
+            userName={profile.name}
+            onSignIn={() => setShowAuthModal(true)}
+          />
         )}
 
         <div className="h-8" />
@@ -525,9 +532,11 @@ function DayNudgeModal({
 function UpgradeCard({
   personaName,
   userName,
+  onSignIn,
 }: {
   personaName: string
   userName: string
+  onSignIn: () => void
 }) {
   return (
     <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-5">
@@ -536,15 +545,17 @@ function UpgradeCard({
           Keep going, {userName}
         </p>
         <p className="font-mono text-sm leading-relaxed text-foreground">
-          {personaName} has more to show you. Unlock full access to keep
-          building.
+          {personaName} has more to show you. Sign in to unlock full access and keep your progress across devices.
         </p>
       </div>
-      <button className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90">
-        Unlock Full Access
+      <button 
+        onClick={onSignIn}
+        className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90"
+      >
+        Sign in to continue
       </button>
       <p className="text-center font-mono text-[10px] text-muted-foreground">
-        Pricing coming soon — beta users get early access.
+        Already have an account? Sign in to pick up where you left off.
       </p>
     </div>
   )

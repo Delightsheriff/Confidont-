@@ -1,10 +1,13 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { hasCompletedOnboarding } from "@/lib/storage/user"
+import { useAuth } from "@/hooks/useAuth"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { WaitlistForm } from "@/components/landing"
+import AuthModal from "@/components/auth/AuthModal"
 import {
   Card,
   CardContent,
@@ -62,9 +65,52 @@ const WHO_IT_FOR = [
 
 export default function LandingPage() {
   const router = useRouter()
+  const { user, isLoading: authLoading } = useAuth()
+  const [showAuthModal, setShowAuthModal] = useState(false)
+
+  useEffect(() => {
+    if (authLoading) return
+    
+    const init = async () => {
+      // Already authenticated with profile → go to home
+      if (hasCompletedOnboarding()) {
+        router.replace("/home")
+        return
+      }
+      
+      // Already authenticated but no local profile → recover from Supabase
+      if (user) {
+        router.replace("/home")
+        return
+      }
+      
+      // Not authenticated, no local profile → stay on landing
+      // User will choose "Try it free" or "I already have an account"
+    }
+    
+    init()
+  }, [user, authLoading, router])
 
   const handleTryIt = () => {
-    router.push(hasCompletedOnboarding() ? "/home" : "/onboarding")
+    router.push("/onboarding")
+  }
+
+  const handleSignIn = () => {
+    setShowAuthModal(true)
+  }
+
+  const handleAuthSuccess = async () => {
+    setShowAuthModal(false)
+    // /home will handle profile recovery
+    router.push("/home")
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
   }
 
   return (
@@ -75,13 +121,23 @@ export default function LandingPage() {
           <span className="font-mono text-lg font-bold text-primary">
             Confidont
           </span>
-          <Button
-            onClick={handleTryIt}
-            size="sm"
-            className="rounded-full px-5 font-mono text-xs"
-          >
-            Try it free →
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleSignIn}
+              size="sm"
+              className="font-mono text-xs text-muted-foreground hover:text-foreground"
+            >
+              Sign in
+            </Button>
+            <Button
+              onClick={handleTryIt}
+              size="sm"
+              className="rounded-full px-5 font-mono text-xs"
+            >
+              Try it free →
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -118,10 +174,10 @@ export default function LandingPage() {
           <Button
             variant="outline"
             size="lg"
-            asChild
+            onClick={handleSignIn}
             className="w-full rounded-full px-8 font-mono sm:w-auto"
           >
-            <a href="#waitlist">Join the waitlist</a>
+            I already have an account
           </Button>
         </div>
 
@@ -234,6 +290,15 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
+
+      {/* Auth modal for returning users */}
+      {showAuthModal && (
+        <AuthModal
+          context="general"
+          onDismiss={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
     </div>
   )
 }
