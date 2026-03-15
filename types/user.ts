@@ -1,7 +1,5 @@
 // ─────────────────────────────────────────────
 // types/user.ts
-//
-// User profile, onboarding answers, personas.
 // ─────────────────────────────────────────────
 
 export type Pronoun = "she/her" | "he/him" | "they/them" | "prefer not to say"
@@ -18,12 +16,6 @@ export type CameraConfidence =
   | "freeze-or-fumble"
   | "manage-want-to-improve"
 
-export type SuccessDefinition =
-  | "nail-an-interview"
-  | "get-through-presentations"
-  | "feel-natural-on-calls"
-  | "build-content-presence"
-
 export type SessionsPerDay = 1 | 2 | 3
 
 export interface OnboardingAnswers {
@@ -31,13 +23,12 @@ export interface OnboardingAnswers {
   pronouns: Pronoun
   goal: Goal
   cameraConfidence: CameraConfidence
-  successDefinition: SuccessDefinition
   sessionsPerDay: SessionsPerDay
   personaId: string
 }
 
 export interface UserProfile extends OnboardingAnswers {
-  completedAt: string // ISO date
+  completedAt: string
 }
 
 // ─────────────────────────────────────────────
@@ -48,11 +39,11 @@ export interface Persona {
   id: string
   name: string
   ageRange: string
-  personality: string // 3 words
-  communicationStyle: string // one sentence
-  feedbackStyle: string // one sentence
-  signatureLine: string // their vibe in one quote
-  colorAccent: string // tailwind bg class for avatar placeholder
+  personality: string
+  communicationStyle: string
+  feedbackStyle: string
+  signatureLine: string
+  colorAccent: string
 }
 
 export const PERSONAS: Persona[] = [

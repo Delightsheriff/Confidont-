@@ -7,11 +7,6 @@ import { DEFAULT_CONFIG } from "@/lib/session-config"
 import { generateTopics } from "@/lib/ai/topics"
 import type { SessionTopic } from "@/lib/ai/topics"
 import type { Nudge, SessionScore } from "@/types/session"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 
 // ─────────────────────────────────────────────
 // SessionAnalyzer
@@ -38,6 +33,7 @@ interface SessionAnalyzerProps {
   completedTopics?: string[]
   totalSessions?: number
   onSessionComplete: (result: SessionResult) => void
+  onBack?: () => void
 }
 
 export interface SessionResult {
@@ -56,6 +52,7 @@ export default function SessionAnalyzer({
   completedTopics = [],
   totalSessions = 0,
   onSessionComplete,
+  onBack,
 }: SessionAnalyzerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -87,22 +84,6 @@ export default function SessionAnalyzer({
 
   const { fillerWordCount, detectedFillers, silenceDuration, isListening } =
     useAudioAnalysis(isActive, config)
-
-  // ── Camera helpers ───────────────────────────
-  const startCamera = useCallback(async (): Promise<MediaStream | null> => {
-    setCameraError(null)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720, facingMode: "user" },
-        audio: true,
-      })
-      return stream
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error"
-      setCameraError(`Camera access denied: ${msg}`)
-      return null
-    }
-  }, [])
 
   // ── Waveform ─────────────────────────────────
   const drawWaveform = useCallback(() => {
@@ -141,6 +122,16 @@ export default function SessionAnalyzer({
     draw()
   }, [])
 
+  const stopWaveform = useCallback(() => {
+    if (waveAnimRef.current !== undefined) {
+      cancelAnimationFrame(waveAnimRef.current)
+      waveAnimRef.current = undefined
+    }
+    const canvas = canvasRef.current
+    if (canvas)
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
+  }, [])
+
   const setupWaveform = useCallback(
     (stream: MediaStream) => {
       try {
@@ -158,14 +149,20 @@ export default function SessionAnalyzer({
     [drawWaveform]
   )
 
-  const stopWaveform = useCallback(() => {
-    if (waveAnimRef.current !== undefined) {
-      cancelAnimationFrame(waveAnimRef.current)
-      waveAnimRef.current = undefined
+  // ── Camera helpers ───────────────────────────
+  const startCamera = useCallback(async (): Promise<MediaStream | null> => {
+    setCameraError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: "user" },
+        audio: true,
+      })
+      return stream
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error"
+      setCameraError(`Camera access denied: ${msg}`)
+      return null
     }
-    const canvas = canvasRef.current
-    if (canvas)
-      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
   }, [])
 
   const stopCamera = useCallback(() => {
@@ -236,8 +233,8 @@ export default function SessionAnalyzer({
     }
   }, [
     startCamera,
-    setupWaveform,
     startTopicTimer,
+    setupWaveform,
     userName,
     goal,
     phase,
@@ -301,7 +298,7 @@ export default function SessionAnalyzer({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-foreground">
       {/* Header */}
-      <div className="flex flex-col gap-1 text-center">
+      <div className="space-y-1 text-center">
         <h1 className="font-mono text-2xl font-bold text-primary">Confidont</h1>
         <p className="font-mono text-xs text-muted-foreground">
           {sessionState === "loading-topics"
@@ -325,14 +322,13 @@ export default function SessionAnalyzer({
           autoPlay
           playsInline
           muted
-          className={cn(
-            "absolute inset-0 size-full -scale-x-100 object-cover transition-opacity duration-300",
+          className={`absolute inset-0 h-full w-full -scale-x-100 object-cover transition-opacity duration-300 ${
             showDebugFeed ? "opacity-100" : "opacity-0"
-          )}
+          }`}
         />
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-card via-card/60 to-transparent" />
 
         {/* ── Idle state ── */}
         {sessionState === "idle" && (
@@ -346,7 +342,7 @@ export default function SessionAnalyzer({
         {/* ── Loading topics state ── */}
         {sessionState === "loading-topics" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="font-mono text-sm text-muted-foreground">
               Preparing your session...
             </p>
@@ -357,21 +353,17 @@ export default function SessionAnalyzer({
         {isActive && currentTopic && (
           <>
             {/* Eye contact indicator — top left */}
-            <div className="absolute top-4 left-4">
-              <Badge
-                variant={frameMetrics?.eyeContact ? "default" : "secondary"}
-                className="font-mono"
-              >
-                <span
-                  className={cn(
-                    "size-2 rounded-full transition-colors",
-                    frameMetrics?.eyeContact
-                      ? "bg-primary-foreground"
-                      : "bg-muted-foreground"
-                  )}
-                />
+            <div className="absolute top-4 left-4 flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full transition-colors duration-300 ${
+                  frameMetrics?.eyeContact
+                    ? "bg-primary"
+                    : "bg-muted-foreground"
+                }`}
+              />
+              <span className="font-mono text-xs text-muted-foreground">
                 {frameMetrics?.eyeContact ? "Eye contact" : "Look at camera"}
-              </Badge>
+              </span>
             </div>
 
             {/* Duration — top right */}
@@ -381,7 +373,7 @@ export default function SessionAnalyzer({
 
             {/* Topic prompt — center */}
             <div className="absolute inset-0 flex items-center justify-center px-8">
-              <div className="flex flex-col gap-2 text-center">
+              <div className="space-y-2 text-center">
                 <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
                   Topic {topicIndex + 1} of {topics.length}
                 </p>
@@ -437,23 +429,20 @@ export default function SessionAnalyzer({
 
         {/* Debug toggle — dev only */}
         {isDev && (
-          <Button
-            variant="ghost"
-            size="xs"
+          <button
             onClick={() => setShowDebugFeed((p) => !p)}
-            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 hover:text-muted-foreground"
+            className="absolute right-3 bottom-2 font-mono text-[10px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
           >
             {showDebugFeed ? "hide feed" : "debug feed"}
-          </Button>
+          </button>
         )}
       </div>
 
       {/* Error */}
       {cameraError && (
-        <Alert variant="destructive" className="max-w-sm font-mono text-xs">
-          <AlertTitle>Camera Error</AlertTitle>
-          <AlertDescription>{cameraError}</AlertDescription>
-        </Alert>
+        <p className="max-w-sm text-center font-mono text-xs text-destructive">
+          {cameraError}
+        </p>
       )}
 
       {/* ── Metrics Grid — active only ─────────── */}
@@ -561,62 +550,73 @@ export default function SessionAnalyzer({
       )}
 
       {/* ── Controls ───────────────────────────── */}
-      <div className="flex items-center gap-3">
-        {/* Restart — visible during active session */}
-        {sessionState === "active" && (
-          <Button
-            variant="outline"
-            onClick={restartSession}
-            className="rounded-full px-6 font-mono text-sm"
-          >
-            Restart
-          </Button>
-        )}
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center gap-3">
+          {/* Restart — visible during active session */}
+          {sessionState === "active" && (
+            <button
+              onClick={restartSession}
+              className="rounded-full border border-border px-6 py-3 font-mono text-sm text-muted-foreground transition-all hover:border-foreground/30"
+            >
+              Restart
+            </button>
+          )}
 
-        {/* Main CTA */}
-        {sessionState === "idle" && (
-          <Button
-            onClick={startSession}
-            disabled={!isReady}
-            size="lg"
-            className="rounded-full px-10 font-mono text-sm font-bold"
-          >
-            {isReady ? "Start Session" : "Loading AI..."}
-          </Button>
-        )}
+          {/* Main CTA */}
+          {sessionState === "idle" && (
+            <button
+              onClick={startSession}
+              disabled={!isReady}
+              className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
+                !isReady
+                  ? "cursor-not-allowed bg-muted text-muted-foreground"
+                  : "bg-primary text-primary-foreground hover:opacity-90"
+              }`}
+            >
+              {isReady ? "Start Session" : "Loading AI..."}
+            </button>
+          )}
 
-        {sessionState === "loading-topics" && (
-          <Button
-            disabled
-            size="lg"
-            className="rounded-full px-10 font-mono text-sm font-bold"
-          >
-            Preparing...
-          </Button>
-        )}
+          {sessionState === "loading-topics" && (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+            >
+              Preparing...
+            </button>
+          )}
 
-        {/* Next Topic — appears after 30s minimum */}
-        {sessionState === "active" && canAdvance && (
-          <Button
-            onClick={nextTopic}
-            size="lg"
-            className="animate-in rounded-full px-10 font-mono text-sm font-bold fade-in slide-in-from-bottom-1"
-          >
-            {topicIndex < topics.length - 1
-              ? "Next Topic \u2192"
-              : "Finish Session"}
-          </Button>
-        )}
+          {/* Next Topic — appears after 30s minimum */}
+          {sessionState === "active" && canAdvance && (
+            <button
+              onClick={nextTopic}
+              className="animate-in rounded-full bg-primary px-10 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 fade-in slide-in-from-bottom-1 hover:opacity-90"
+            >
+              {topicIndex < topics.length - 1
+                ? "Next Topic →"
+                : "Finish Session"}
+            </button>
+          )}
 
-        {/* Waiting for minimum time */}
-        {sessionState === "active" && !canAdvance && (
-          <Button
-            disabled
-            size="lg"
-            className="rounded-full px-10 font-mono text-sm font-bold"
+          {/* Waiting for minimum time */}
+          {sessionState === "active" && !canAdvance && (
+            <button
+              disabled
+              className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+            >
+              Keep going...
+            </button>
+          )}
+        </div>
+
+        {/* ← back — visible on idle state only */}
+        {sessionState === "idle" && onBack && (
+          <button
+            onClick={onBack}
+            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            Keep going...
-          </Button>
+            ← back
+          </button>
         )}
       </div>
     </div>
@@ -636,16 +636,15 @@ function formatDuration(seconds: number): string {
 function NudgeBanner({ nudge }: { nudge: Nudge }) {
   const isPositive = nudge.type === "positive-streak"
   return (
-    <Alert
-      className={cn(
-        "absolute right-4 bottom-20 left-4 animate-in text-center font-mono backdrop-blur-sm fade-in slide-in-from-bottom-2",
+    <div
+      className={`absolute right-4 bottom-20 left-4 animate-in rounded-xl px-4 py-2.5 text-center font-mono text-sm backdrop-blur-sm duration-300 fade-in slide-in-from-bottom-2 ${
         isPositive
-          ? "border-primary/30 bg-primary/20 text-primary"
-          : "bg-card/80"
-      )}
+          ? "border border-primary/30 bg-primary/20 text-primary"
+          : "border border-border bg-card/80 text-foreground"
+      }`}
     >
-      <AlertDescription className="text-sm">{nudge.message}</AlertDescription>
-    </Alert>
+      {nudge.message}
+    </div>
   )
 }
 
@@ -661,27 +660,24 @@ function MetricCard({
   detail: string
 }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p
-          className={cn(
-            "font-mono text-lg font-bold",
-            status === "good" && "text-primary",
-            status === "bad" && "text-destructive",
-            status === "neutral" && "text-muted-foreground"
-          )}
-        >
-          {value}
-        </p>
-        <p className="text-[11px] leading-tight text-muted-foreground">
-          {detail}
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
+      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p
+        className={`font-mono text-lg font-bold ${
+          status === "good"
+            ? "text-primary"
+            : status === "bad"
+              ? "text-destructive"
+              : "text-muted-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      <p className="text-[11px] leading-tight text-muted-foreground">
+        {detail}
+      </p>
+    </div>
   )
 }

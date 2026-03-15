@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { hasCompletedOnboarding } from "@/lib/storage/user"
-import { joinWaitlist } from "@/lib/storage/waitlist"
+import { useAuth } from "@/hooks/useAuth"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { WaitlistForm } from "@/components/landing"
+import AuthModal from "@/components/auth/AuthModal"
 import {
   Card,
   CardContent,
@@ -16,11 +17,102 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
+const HOW_IT_WORKS = [
+  {
+    step: "01",
+    title: "Meet your coach",
+    body: "Pick a coach that matches your vibe. They'll be with you every session — warm, honest, and in your corner.",
+  },
+  {
+    step: "02",
+    title: "Speak on a topic",
+    body: "Your coach gives you a prompt. You speak. No scripts, no rehearsals. Just you practicing being you.",
+  },
+  {
+    step: "03",
+    title: "See yourself improve",
+    body: "After each session, your coach breaks down what went well and what to focus on next. Progress you can actually see.",
+  },
+]
+
+const WHO_IT_FOR = [
+  {
+    icon: "💼",
+    title: "Job seekers",
+    body: "Video interviews are unavoidable. Walk in ready.",
+  },
+  {
+    icon: "📊",
+    title: "Presenters",
+    body: "Own the room — whether it's 5 people or 500.",
+  },
+  {
+    icon: "🎥",
+    title: "Content creators",
+    body: "Show up on camera and actually enjoy it.",
+  },
+  {
+    icon: "💻",
+    title: "Remote workers",
+    body: "Feel natural on Zoom, Meet, and Teams every day.",
+  },
+  {
+    icon: "🙋",
+    title: "Anyone, really",
+    body: "Camera anxiety is more common than you think. You're not alone.",
+  },
+]
+
 export default function LandingPage() {
   const router = useRouter()
+  const { user, isInitialized } = useAuth()
+  const [showAuthModal, setShowAuthModal] = useState(false)
+
+  useEffect(() => {
+    if (!isInitialized) return
+    
+    // Already authenticated with profile → go to home
+    if (hasCompletedOnboarding()) {
+      router.replace("/home")
+      return
+    }
+    
+    // Already authenticated but no local profile → recover from Supabase
+    if (user) {
+      router.replace("/home")
+      return
+    }
+    
+    // Not authenticated, no local profile → stay on landing
+    // User will choose "Try it free" or "I already have an account"
+  }, [user, isInitialized, router])
 
   const handleTryIt = () => {
-    router.push(hasCompletedOnboarding() ? "/home" : "/onboarding")
+    router.push("/onboarding")
+  }
+
+  const handleSignIn = () => {
+    setShowAuthModal(true)
+  }
+
+  const handleAuthSuccess = async () => {
+    setShowAuthModal(false)
+    // /home will handle profile recovery
+    router.push("/home")
+  }
+
+  // Show loading only while checking auth (rare with SSR)
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  // Don't render anything while redirecting (prevents flash)
+  if (user || hasCompletedOnboarding()) {
+    return null
   }
 
   return (
@@ -31,13 +123,23 @@ export default function LandingPage() {
           <span className="font-mono text-lg font-bold text-primary">
             Confidont
           </span>
-          <Button
-            onClick={handleTryIt}
-            size="sm"
-            className="rounded-full px-5 font-mono text-xs"
-          >
-            Try it free →
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleSignIn}
+              size="sm"
+              className="font-mono text-xs text-muted-foreground hover:text-foreground"
+            >
+              Sign in
+            </Button>
+            <Button
+              onClick={handleTryIt}
+              size="sm"
+              className="rounded-full px-5 font-mono text-xs"
+            >
+              Try it free →
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -74,14 +176,14 @@ export default function LandingPage() {
           <Button
             variant="outline"
             size="lg"
-            asChild
+            onClick={handleSignIn}
             className="w-full rounded-full px-8 font-mono sm:w-auto"
           >
-            <a href="#waitlist">Join the waitlist</a>
+            I already have an account
           </Button>
         </div>
 
-        <p className="font-mono text-xs text-muted-foreground/50">
+        <p className="font-mono text-xs text-muted-foreground">
           No account needed to start. Your video never leaves your device.
         </p>
       </section>
@@ -98,24 +200,8 @@ export default function LandingPage() {
             </h2>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              {
-                step: "01",
-                title: "Meet your coach",
-                body: "Pick a coach that matches your vibe. They'll be with you every session — warm, honest, and in your corner.",
-              },
-              {
-                step: "02",
-                title: "Speak on a topic",
-                body: "Your coach gives you a prompt. You speak. No scripts, no rehearsals. Just you practicing being you.",
-              },
-              {
-                step: "03",
-                title: "See yourself improve",
-                body: "After each session, your coach breaks down what went well and what to focus on next. Progress you can actually see.",
-              },
-            ].map((item) => (
-              <Card key={item.step} className="border-primary/10 bg-primary/[0.02]">
+            {HOW_IT_WORKS.map((item) => (
+              <Card key={item.step} className="border-primary/10 bg-card/50">
                 <CardHeader>
                   <p className="font-mono text-3xl font-bold text-primary/20">
                     {item.step}
@@ -149,37 +235,8 @@ export default function LandingPage() {
             </h2>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              {
-                icon: "💼",
-                title: "Job seekers",
-                body: "Video interviews are unavoidable. Walk in ready.",
-              },
-              {
-                icon: "📊",
-                title: "Presenters",
-                body: "Own the room — whether it's 5 people or 500.",
-              },
-              {
-                icon: "🎥",
-                title: "Content creators",
-                body: "Show up on camera and actually enjoy it.",
-              },
-              {
-                icon: "💻",
-                title: "Remote workers",
-                body: "Feel natural on Zoom, Meet, and Teams every day.",
-              },
-              {
-                icon: "🙋",
-                title: "Anyone, really",
-                body: "Camera anxiety is more common than you think. You're not alone.",
-              },
-            ].map((item) => (
-              <Card
-                key={item.title}
-                className="flex items-start gap-4 p-4"
-              >
+            {WHO_IT_FOR.map((item) => (
+              <Card key={item.title} className="flex items-start gap-4 p-4">
                 <span className="mt-0.5 shrink-0 text-xl">{item.icon}</span>
                 <div>
                   <CardTitle className="font-mono text-sm">
@@ -201,28 +258,26 @@ export default function LandingPage() {
         className="border-t border-border bg-card px-6 py-20"
       >
         <div className="mx-auto flex max-w-lg flex-col gap-8 text-center">
-          <Card className="border-none bg-transparent shadow-none">
-            <CardHeader>
-              <p className="font-mono text-xs tracking-widest text-primary uppercase">
-                Waitlist
-              </p>
-              <CardTitle className="font-mono text-3xl font-bold text-foreground">
-                Get early access.
-              </CardTitle>
-              <CardDescription className="text-sm leading-relaxed">
-                Confidont is in beta. Join the waitlist and be among the first to
-                get full access when we launch.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <WaitlistForm />
-            </CardContent>
-            <CardFooter className="justify-center">
-              <p className="font-mono text-xs text-muted-foreground/50">
-                No spam. Just one email when we&apos;re ready for you.
-              </p>
-            </CardFooter>
-          </Card>
+          <CardHeader>
+            <p className="font-mono text-xs tracking-widest text-primary uppercase">
+              Waitlist
+            </p>
+            <CardTitle className="font-mono text-3xl font-bold text-foreground">
+              Get early access.
+            </CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              Confidont is in beta. Join the waitlist and be among the first
+              to get full access when we launch.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <WaitlistForm />
+          </CardContent>
+          <CardFooter className="justify-center">
+            <p className="font-mono text-xs text-muted-foreground">
+              No spam. Just one email when we&apos;re ready for you.
+            </p>
+          </CardFooter>
         </div>
       </section>
 
@@ -237,94 +292,15 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
-    </div>
-  )
-}
 
-// ── Waitlist form ──────────────────────────────
-
-type FormState = "idle" | "loading" | "success" | "already" | "error"
-
-function WaitlistForm() {
-  const [email, setEmail] = useState("")
-  const [formState, setFormState] = useState<FormState>("idle")
-
-  const handleSubmit = async () => {
-    const trimmed = email.trim().toLowerCase()
-    if (!isValidEmail(trimmed)) return
-    setFormState("loading")
-    const result = await joinWaitlist(trimmed)
-    if (!result.success) {
-      setFormState("error")
-      return
-    }
-    if (result.alreadyJoined) {
-      setFormState("already")
-      return
-    }
-    setFormState("success")
-  }
-
-  if (formState === "success") {
-    return (
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="flex flex-col gap-2 pt-6">
-          <p className="text-2xl">🎉</p>
-          <p className="font-mono font-bold text-foreground">
-            You&apos;re on the list.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            We&apos;ll email you the moment early access opens.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (formState === "already") {
-    return (
-      <Card>
-        <CardContent className="flex flex-col gap-2 pt-6">
-          <p className="font-mono font-bold text-foreground">
-            You&apos;re already on the list.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            We haven&apos;t forgotten about you.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-2">
-        <Input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="your@email.com"
-          className="flex-1 rounded-full px-5 py-3 font-mono text-sm"
+      {/* Auth modal for returning users */}
+      {showAuthModal && (
+        <AuthModal
+          context="general"
+          onDismiss={() => setShowAuthModal(false)}
+          onSuccess={handleAuthSuccess}
         />
-        <Button
-          onClick={handleSubmit}
-          disabled={formState === "loading" || !isValidEmail(email.trim())}
-          size="lg"
-          className="shrink-0 rounded-full px-6 font-mono"
-        >
-          {formState === "loading" ? "..." : "Join →"}
-        </Button>
-      </div>
-      {formState === "error" && (
-        <p className="text-center font-mono text-xs text-destructive">
-          Something went wrong. Try again.
-        </p>
       )}
     </div>
   )
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
