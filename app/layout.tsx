@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google"
+import { Geist, JetBrains_Mono } from "next/font/google"
 import { createClient } from "@/lib/supabase/server"
 import { AuthProvider } from "@/components/auth/AuthProvider"
 
@@ -11,7 +11,10 @@ const fontSans = Geist({
   variable: "--font-sans",
 })
 
-const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'})
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+})
 
 export default async function RootLayout({
   children,
@@ -19,20 +22,25 @@ export default async function RootLayout({
   children: React.ReactNode
 }>) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const initialUser = user ?? null
 
   return (
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontSans.variable, "font-mono", jetbrainsMono.variable)}
+      className={cn(
+        "antialiased",
+        fontSans.variable,
+        "font-mono",
+        jetbrainsMono.variable
+      )}
     >
       <body>
         <ThemeProvider>
-          <AuthProvider initialUser={initialUser}>
-            {children}
-          </AuthProvider>
+          <AuthProvider initialUser={initialUser}>{children}</AuthProvider>
         </ThemeProvider>
       </body>
     </html>
