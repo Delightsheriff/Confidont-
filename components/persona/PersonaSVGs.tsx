@@ -65,6 +65,11 @@ export function AmaraSVG({
         }
       `}</style>
 
+      {/* Static background ellipse */}
+      <ellipse cx="60" cy="72" rx="52" ry="48" fill="#f87171" opacity="0.09" />
+      {/* Ground shadow */}
+      <ellipse cx="60" cy="117" rx="26" ry="4" fill="#000" opacity="0.06" />
+
       <g
         style={{
           animation:
@@ -86,6 +91,10 @@ export function AmaraSVG({
           fill="#f4a7a7"
           opacity="0.9"
         />
+        {/* Left arm */}
+        <path d="M28 92 Q20 104 22 116" stroke="#c8714a" strokeWidth="8" strokeLinecap="round" fill="none" />
+        {/* Right arm */}
+        <path d="M92 92 Q100 104 98 116" stroke="#c8714a" strokeWidth="8" strokeLinecap="round" fill="none" />
         {/* Neck */}
         <rect x="53" y="78" width="14" height="16" rx="7" fill="#d4845a" />
         {/* Head */}
@@ -231,6 +240,11 @@ export function JamesSVG({
         }
       `}</style>
 
+      {/* Static background ellipse */}
+      <ellipse cx="60" cy="72" rx="52" ry="48" fill="#38bdf8" opacity="0.09" />
+      {/* Ground shadow */}
+      <ellipse cx="60" cy="117" rx="26" ry="4" fill="#000" opacity="0.06" />
+
       <g
         style={{
           animation:
@@ -252,6 +266,10 @@ export function JamesSVG({
           fill="#bcd6f0"
           opacity="0.9"
         />
+        {/* Left arm */}
+        <path d="M24 93 Q16 105 18 117" stroke="#c49a72" strokeWidth="9" strokeLinecap="round" fill="none" />
+        {/* Right arm */}
+        <path d="M96 93 Q104 105 102 117" stroke="#c49a72" strokeWidth="9" strokeLinecap="round" fill="none" />
         {/* Collar */}
         <path
           d="M48 92 L60 98 L72 92"
@@ -376,6 +394,11 @@ export function ZoeSVG({
         }
       `}</style>
 
+      {/* Static background ellipse */}
+      <ellipse cx="60" cy="72" rx="52" ry="48" fill="#fbbf24" opacity="0.09" />
+      {/* Ground shadow */}
+      <ellipse cx="60" cy="117" rx="26" ry="4" fill="#000" opacity="0.06" />
+
       <g
         style={{
           animation:
@@ -397,6 +420,10 @@ export function ZoeSVG({
           fill="#fbbf6a"
           opacity="0.85"
         />
+        {/* Left arm */}
+        <path d="M27 93 Q19 104 21 116" stroke="#e8b48a" strokeWidth="8" strokeLinecap="round" fill="none" />
+        {/* Right arm */}
+        <path d="M93 93 Q101 104 99 116" stroke="#e8b48a" strokeWidth="8" strokeLinecap="round" fill="none" />
         <path
           d="M42 95 Q60 100 78 95 L75 108 Q60 112 45 108 Z"
           fill="#e8a840"
@@ -542,6 +569,11 @@ export function DrNkosiSVG({
         }
       `}</style>
 
+      {/* Static background ellipse */}
+      <ellipse cx="60" cy="72" rx="52" ry="48" fill="#10b981" opacity="0.09" />
+      {/* Ground shadow */}
+      <ellipse cx="60" cy="117" rx="26" ry="4" fill="#000" opacity="0.06" />
+
       <g
         style={{
           animation:
@@ -563,6 +595,10 @@ export function DrNkosiSVG({
           fill="#1a3a2a"
           opacity="0.95"
         />
+        {/* Left arm */}
+        <path d="M24 93 Q16 106 18 118" stroke="#1a3a2a" strokeWidth="9" strokeLinecap="round" fill="none" />
+        {/* Right arm */}
+        <path d="M96 93 Q104 106 102 118" stroke="#1a3a2a" strokeWidth="9" strokeLinecap="round" fill="none" />
         <path
           d="M46 95 L60 100 L74 95 L72 108 Q60 113 48 108 Z"
           fill="#0d2218"
@@ -738,6 +774,11 @@ export function PriyaSVG({
         }
       `}</style>
 
+      {/* Static background ellipse */}
+      <ellipse cx="60" cy="72" rx="52" ry="48" fill="#a78bfa" opacity="0.09" />
+      {/* Ground shadow */}
+      <ellipse cx="60" cy="117" rx="26" ry="4" fill="#000" opacity="0.06" />
+
       <g
         style={{
           animation:
@@ -759,6 +800,10 @@ export function PriyaSVG({
           fill="#6d3d8a"
           opacity="0.9"
         />
+        {/* Left arm */}
+        <path d="M26 93 Q18 105 20 117" stroke="#6d3d8a" strokeWidth="8" strokeLinecap="round" fill="none" />
+        {/* Right arm */}
+        <path d="M94 93 Q102 105 100 117" stroke="#6d3d8a" strokeWidth="8" strokeLinecap="round" fill="none" />
         <path
           d="M44 93 L60 99 L76 93 L74 107 Q60 112 46 107 Z"
           fill="#4a2460"
