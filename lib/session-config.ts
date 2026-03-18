@@ -1,26 +1,16 @@
 import type { FaceAnalysisConfig, NudgeType } from "@/types/session"
 
-// ─────────────────────────────────────────────
-// Default configuration
-// Override per-session based on user phase/goal
-// ─────────────────────────────────────────────
-
 export const DEFAULT_CONFIG: FaceAnalysisConfig = {
   metrics: {
-    // Vision
     eyeContact: true,
     composure: true,
     headPose: true,
-    blinkRate: false, // commented out until calibrated
-    mouthMovement: false, // future use
-
-    // Audio
+    blinkRate: false,
+    mouthMovement: false,
     fillerWords: true,
-    speechPace: false, // future — needs word count accuracy
+    speechPace: false, // enable once WPM accuracy validated
     silenceDuration: true,
-
-    // Environment
-    backgroundClutter: false, // future — needs confidence threshold tuning
+    backgroundClutter: false,
     lightingQuality: true,
     cameraAngle: true,
   },
@@ -51,15 +41,16 @@ export const DEFAULT_CONFIG: FaceAnalysisConfig = {
       maxSeconds: 8,
     },
     nudge: {
-      cooldownMs: 20000,
+      cooldownMs: 20_000, // global fallback
       positiveStreakSeconds: 30,
+      sessionCap: 4, // max nudges per session
     },
   },
 }
 
 // ─────────────────────────────────────────────
 // Nudge messages — persona-toned, never harsh
-// Keyed by nudge type for easy swapping per persona
+// Keyed by NudgeType for easy per-persona swapping
 // ─────────────────────────────────────────────
 
 export const NUDGE_MESSAGES: Record<NudgeType, string[]> = {
@@ -71,7 +62,7 @@ export const NUDGE_MESSAGES: Record<NudgeType, string[]> = {
   "speech-too-fast": [
     "Slow down a little, take your time.",
     "You're rushing — breathe and let each word land.",
-    "Pace yourself, confidence sounds unhurried.",
+    "Pace yourself. Confidence sounds unhurried.",
   ],
   "speech-too-slow": [
     "Keep your energy up, you're doing great.",
@@ -100,12 +91,11 @@ export const NUDGE_MESSAGES: Record<NudgeType, string[]> = {
   "positive-streak": [
     "You're doing really well — keep that up!",
     "That's the energy — stay right there.",
-    "Great eye contact, you look completely natural.",
+    "Great eye contact. You look completely natural.",
     "You're in the zone now. This is you at your best.",
   ],
 }
 
-// Filler words to detect
 export const FILLER_WORDS = [
   "um",
   "uh",

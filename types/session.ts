@@ -1,61 +1,51 @@
 // ─────────────────────────────────────────────
 // All session metric types for Confidont
-// Add new metrics here first, then implement in
-// useFaceAnalysis and useAudioAnalysis hooks
 // ─────────────────────────────────────────────
 
 export interface MetricsConfig {
   // VISION METRICS (MediaPipe)
-  eyeContact: boolean // Is user looking at camera
-  composure: boolean // Head stability / not fidgeting
-  headPose: boolean // Head tilt / rotation (nodding, turning)
-  blinkRate: boolean // Blinks per minute — too fast = anxious, too slow = staring
-  mouthMovement: boolean // Talking pace via mouth openness
-  // expressiveness: boolean  // Future: smile, raised brows, engaged expression
+  eyeContact: boolean
+  composure: boolean
+  headPose: boolean
+  blinkRate: boolean
+  mouthMovement: boolean
 
   // AUDIO METRICS (Web Speech API)
-  fillerWords: boolean // "um", "uh", "like", "you know", "basically"
-  speechPace: boolean // Words per minute — too fast or too slow
-  silenceDuration: boolean // Long pauses mid sentence
-  // voiceClarity: boolean   // Future: clarity scoring via audio analysis
+  fillerWords: boolean
+  speechPace: boolean
+  silenceDuration: boolean
 
-  // ENVIRONMENT METRICS (MediaPipe + heuristics)
-  backgroundClutter: boolean // Busy background detected via face landmark confidence
-  lightingQuality: boolean // Face brightness/contrast heuristic
-  cameraAngle: boolean // Face vertical position — should be at eye level
-  // noisyEnvironment: boolean // Future: audio noise floor detection
+  // ENVIRONMENT METRICS
+  backgroundClutter: boolean
+  lightingQuality: boolean
+  cameraAngle: boolean
 }
 
 export interface FrameMetrics {
-  // Vision
   eyeContact: boolean | null
   composure: boolean | null
   headPose: HeadPose | null
-  blinkRate: number | null // blinks per minute (rolling)
-  mouthMovement: number | null // 0-1 openness ratio
-
-  // Audio
-  fillerWords: string[] // filler words detected this frame window
-  speechPace: number | null // words per minute
-  silenceDuration: number | null // seconds of current silence
-
-  // Environment
+  blinkRate: number | null
+  mouthMovement: number | null
+  fillerWords: string[]
+  speechPace: number | null
+  silenceDuration: number | null
   backgroundClutter: "clear" | "cluttered" | null
   lightingQuality: "good" | "dim" | "harsh" | null
   cameraAngle: "eye-level" | "too-high" | "too-low" | null
 }
 
 export interface HeadPose {
-  pitch: number // up/down tilt
-  yaw: number // left/right rotation
-  roll: number // side tilt
+  pitch: number
+  yaw: number
+  roll: number
 }
 
 export interface SessionScore {
-  eyeContactPercent: number // 0-100
-  composurePercent: number // 0-100
-  fillerWordCount: number // total count
-  speechPaceAvg: number | null // avg WPM
+  eyeContactPercent: number
+  composurePercent: number
+  fillerWordCount: number
+  speechPaceAvg: number | null
   totalPoints: number
   durationSeconds: number
 }
@@ -84,32 +74,33 @@ export interface FaceAnalysisConfig {
 
 export interface AnalysisThresholds {
   eyeContact: {
-    horizontalMin: number // default 0.42
-    horizontalMax: number // default 0.58
-    verticalMin: number // default 0.4
-    verticalMax: number // default 0.65
+    horizontalMin: number
+    horizontalMax: number
+    verticalMin: number
+    verticalMax: number
   }
   composure: {
-    maxMovement: number // default 0.005 — nose movement delta
+    maxMovement: number
   }
   headPose: {
-    maxPitch: number // degrees — default 15
-    maxYaw: number // degrees — default 20
-    maxRoll: number // degrees — default 15
+    maxPitch: number
+    maxYaw: number
+    maxRoll: number
   }
   blinkRate: {
-    minNormal: number // blinks/min — default 10
-    maxNormal: number // blinks/min — default 25
+    minNormal: number
+    maxNormal: number
   }
   speechPace: {
-    minWPM: number // default 110
-    maxWPM: number // default 160
+    minWPM: number
+    maxWPM: number
   }
   silence: {
-    maxSeconds: number // default 8
+    maxSeconds: number
   }
   nudge: {
-    cooldownMs: number // default 20000 — min time between nudges
-    positiveStreakSeconds: number // default 30 — seconds of good metrics for positive nudge
+    cooldownMs: number // legacy — still used as fallback
+    positiveStreakSeconds: number
+    sessionCap: number // max total nudges per session (default 4)
   }
 }
