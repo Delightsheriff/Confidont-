@@ -121,6 +121,42 @@ export function getProfile(): UserProfile | null {
   }
 }
 
+// ── Called from /settings to change persona / goal / cadence ──────
+// Updates localStorage immediately, then syncs to Supabase if authenticated.
+export async function updateProfile(changes: Partial<OnboardingAnswers>): Promise<void> {
+  const current = getProfile()
+  if (!current) return
+
+  const updated: UserProfile = { ...current, ...changes }
+  if (typeof window !== "undefined") {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(updated))
+  }
+
+  try {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const patch: Record<string, unknown> = {}
+    if (changes.name !== undefined)           patch.name               = changes.name
+    if (changes.pronouns !== undefined)       patch.pronouns           = changes.pronouns
+    if (changes.goal !== undefined) {
+      patch.goal               = changes.goal
+      patch.success_definition = goalToSuccessDefinition(changes.goal)
+    }
+    if (changes.cameraConfidence !== undefined) patch.camera_confidence = changes.cameraConfidence
+    if (changes.sessionsPerDay !== undefined)   patch.sessions_per_day  = changes.sessionsPerDay
+    if (changes.personaId !== undefined)        patch.persona_id        = changes.personaId
+
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("profiles").update(patch).eq("id", user.id)
+    }
+  } catch (err) {
+    console.error("[updateProfile] Supabase sync failed:", err)
+    // localStorage already updated — silent continue
+  }
+}
+
 export function hasCompletedOnboarding(): boolean {
   return getProfile() !== null
 }

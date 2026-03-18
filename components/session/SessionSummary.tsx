@@ -181,6 +181,13 @@ export default function SessionSummary({
                 </div>
               </div>
 
+              {/* AI source indicator */}
+              {feedback && !feedback.aiGenerated && (
+                <p className="font-mono text-[10px] text-muted-foreground/40 text-center pt-1">
+                  Based on your session data · AI unavailable
+                </p>
+              )}
+
               <Separator />
 
               {(feedback?.pointsEarned ?? 0) > 0 && (

@@ -42,11 +42,14 @@ export default function HomePage() {
   const { user, isInitialized } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [progress, setProgress] = useState<UserProgress | null>(null)
+  const [initError, setInitError] = useState(false)
 
   useEffect(() => {
     if (!isInitialized) return
 
     const init = async () => {
+      setInitError(false)
+      try {
       // ── Authenticated user ────────────────────
       if (user) {
         const supabaseProfile = await getProfileFromSupabase()
@@ -97,10 +100,30 @@ export default function HomePage() {
 
       // No profile anywhere → back to landing
       router.replace("/")
+      } catch (err) {
+        console.error("[home] init failed:", err)
+        setInitError(true)
+      }
     }
 
     init()
   }, [user, isInitialized, router])
+
+  if (initError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6">
+        <p className="font-mono text-sm text-muted-foreground text-center">
+          Something went wrong loading your profile.
+        </p>
+        <button
+          onClick={() => { setInitError(false); setProfile(null); setProgress(null) }}
+          className="font-mono text-xs text-primary underline underline-offset-4"
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   if (!isInitialized || !profile || !progress) {
     return (

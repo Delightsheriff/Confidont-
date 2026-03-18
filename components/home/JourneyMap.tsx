@@ -212,6 +212,20 @@ export default function JourneyMap({
 
                 <DropdownMenuSeparator className="my-1" />
 
+                {/* Settings */}
+                <DropdownMenuItem
+                  onClick={() => router.push("/settings")}
+                  className="flex items-center gap-2 font-mono text-xs text-muted-foreground"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <circle cx="6" cy="6" r="1.8" stroke="currentColor" strokeWidth="1.2"/>
+                    <path d="M6 1v1.2M6 9.8V11M1 6h1.2M9.8 6H11M2.4 2.4l.85.85M8.75 8.75l.85.85M9.6 2.4l-.85.85M3.25 8.75l-.85.85" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
+                  Settings
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1" />
+
                 {/* Sign out */}
                 <DropdownMenuItem
                   onClick={handleSignOut}
@@ -231,19 +245,31 @@ export default function JourneyMap({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="flex items-center gap-2"
-            >
-              <div
-                className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push("/settings")}
+                aria-label="Settings"
+                className="p-1.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
               >
-                {persona.name[0]}
-              </div>
-              <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-[10px] font-bold text-primary transition-colors hover:bg-primary/20">
-                sign in
-              </span>
-            </button>
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="1.8" stroke="currentColor" strokeWidth="1.2"/>
+                  <path d="M6 1v1.2M6 9.8V11M1 6h1.2M9.8 6H11M2.4 2.4l.85.85M8.75 8.75l.85.85M9.6 2.4l-.85.85M3.25 8.75l-.85.85" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="flex items-center gap-2"
+              >
+                <div
+                  className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
+                >
+                  {persona.name[0]}
+                </div>
+                <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-[10px] font-bold text-primary transition-colors hover:bg-primary/20">
+                  sign in
+                </span>
+              </button>
+            </div>
           )}
         </div>
       </div>

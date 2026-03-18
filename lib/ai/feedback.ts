@@ -26,6 +26,7 @@ export interface SessionFeedback {
   highlight: string
   focusNext: string
   pointsEarned: number
+  aiGenerated: boolean
 }
 
 export async function generateFeedback(
@@ -42,7 +43,7 @@ export async function generateFeedback(
       if (res.ok) {
         const feedback: SessionFeedback = await res.json()
         if (feedback.message && feedback.highlight && feedback.focusNext)
-          return feedback
+          return { ...feedback, aiGenerated: true }
       } else {
         console.warn(
           "[generateFeedback] API returned",
@@ -116,5 +117,5 @@ export async function generateFeedback(
       Math.min(durationSeconds / 60, 2) * 10
   )
 
-  return { message, highlight, focusNext, pointsEarned: points }
+  return { message, highlight, focusNext, pointsEarned: points, aiGenerated: false }
 }
