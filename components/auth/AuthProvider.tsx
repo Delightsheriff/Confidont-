@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useMemo, useRef } from 
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
 import { pushProfileToSupabase, clearProfile } from "@/lib/storage/user"
-import { syncProgressFromSupabase, clearProgress } from "@/lib/storage/session"
+import { clearProgress } from "@/lib/storage/session"
 import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 
 interface AuthContextValue {
@@ -66,10 +66,9 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
     if (prevUserRef.current === user.id) return
     prevUserRef.current = user.id
 
-    pushProfileToSupabase()
-      .then(() => syncProgressFromSupabase())
-      .then(() => clearGuestSessionCount())
-      .catch(console.error)
+    // Push onboarding profile to Supabase immediately on sign-in.
+    // Session sync + guest count clear happen in home/page.tsx.
+    pushProfileToSupabase().catch(console.error)
   }, [user])
 
   const signInWithGoogle = async () => {

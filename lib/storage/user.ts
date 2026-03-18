@@ -103,9 +103,6 @@ export async function getProfileFromSupabase(): Promise<UserProfile | null> {
       completedAt:      data.completed_at,
     }
 
-    // Write to localStorage so the rest of the app can read it synchronously
-    // for this session. Cleared on sign-out — not a persistent cross-session cache.
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
     return profile
   } catch (err) {
     console.error("[getProfileFromSupabase] error:", err)

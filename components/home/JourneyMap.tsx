@@ -2,12 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { getProfile } from "@/lib/storage/user"
-import { getProgress } from "@/lib/storage/session"
 import { getDailyStatus } from "@/lib/logic/dailyLimit"
 import { useAuth } from "@/hooks/useAuth"
 import AuthModal from "@/components/auth/AuthModal"
 import { PERSONAS } from "@/types/user"
+import type { UserProfile } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
 import { FREE_SESSION_LIMIT, TOTAL_VISIBLE_SESSIONS } from "@/configs/tiers"
@@ -78,11 +77,15 @@ const PHASES = [
   },
 ]
 
-export default function JourneyMap() {
+export default function JourneyMap({
+  profile,
+  progress,
+}: {
+  profile: UserProfile
+  progress: UserProgress
+}) {
   const router = useRouter()
   const { user, signOut } = useAuth()
-  const profile = getProfile()
-  const progress = getProgress()
 
   const [toast, setToast] = useState<string | null>(null)
   const [showDayNudge, setShowDayNudge] = useState(false)
@@ -111,11 +114,6 @@ export default function JourneyMap() {
     setToast(msg)
     setTimeout(() => setToast(null), 2000)
   }, [])
-
-  if (!profile) {
-    router.replace("/onboarding")
-    return null
-  }
 
   const persona =
     PERSONAS.find((p) => p.id === profile.personaId) ?? PERSONAS[0]
