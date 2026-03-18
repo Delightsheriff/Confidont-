@@ -461,33 +461,23 @@ export default function SessionAnalyzer({
           </div>
         )}
 
-        {/* ── Metrics strip — live signal dots, no numbers ─────────────── */}
+        {/* ── Metrics strip — live dots + running score after 10s ─────── */}
         {sessionState === "active" && (
           <div className="flex items-center gap-5 font-mono text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${
-                  frameMetrics?.eyeContact
-                    ? "bg-primary"
-                    : "bg-muted-foreground/30"
-                }`}
-              />
-              eye contact
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${
-                  frameMetrics?.composure
-                    ? "bg-primary"
-                    : "bg-muted-foreground/30"
-                }`}
-              />
-              composure
-            </span>
+            <LiveMetric
+              label="eye contact"
+              live={frameMetrics?.eyeContact ?? false}
+              runningScore={sessionScore.eyeContactPercent}
+              hasData={sessionScore.durationSeconds >= 10}
+            />
+            <LiveMetric
+              label="composure"
+              live={frameMetrics?.composure ?? false}
+              runningScore={sessionScore.composurePercent}
+              hasData={sessionScore.durationSeconds >= 10}
+            />
             {fillerWordCount > 0 && (
-              <span
-                className={fillerWordCount >= 5 ? "text-destructive/60" : ""}
-              >
+              <span className={fillerWordCount >= 5 ? "text-destructive/60" : ""}>
                 {fillerWordCount === 1
                   ? "one filler"
                   : fillerWordCount < 5
@@ -606,6 +596,50 @@ export default function SessionAnalyzer({
         )}
       </footer>
     </div>
+  )
+}
+
+// ── Live metric pill ───────────────────────────────────────────────────
+
+function LiveMetric({
+  label,
+  live,
+  runningScore,
+  hasData,
+}: {
+  label: string
+  live: boolean
+  runningScore: number
+  hasData: boolean
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span
+        className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${
+          live ? "bg-primary" : "bg-muted-foreground/30"
+        }`}
+      />
+      <span>{label}</span>
+      {hasData && (
+        <span
+          className={`transition-all duration-700 ${
+            runningScore >= 65
+              ? "text-primary/70"
+              : runningScore >= 45
+                ? "text-muted-foreground/60"
+                : "text-destructive/50"
+          }`}
+        >
+          {runningScore >= 80
+            ? "excellent"
+            : runningScore >= 65
+              ? "strong"
+              : runningScore >= 45
+                ? "ok"
+                : "needs work"}
+        </span>
+      )}
+    </span>
   )
 }
 

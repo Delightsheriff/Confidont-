@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import ProgressArc from "@/components/home/ProgressArc"
 
 // ─────────────────────────────────────────────
 // JourneyMap
@@ -261,6 +262,9 @@ export default function JourneyMap({
             value={`${daily.sessionsUsedToday}/${daily.limitForToday}`}
           />
         </div>
+
+        {/* Progress arc — shown once user has ≥ 2 sessions */}
+        <ProgressArc progress={progress} />
 
         {/* Session path */}
         <div className="relative space-y-2">
