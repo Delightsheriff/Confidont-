@@ -11,6 +11,7 @@ import { PERSONAS } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
 import { FREE_SESSION_LIMIT, TOTAL_VISIBLE_SESSIONS } from "@/configs/tiers"
+import type { User } from "@supabase/supabase-js"
 
 // ─────────────────────────────────────────────
 // JourneyMap
@@ -165,13 +166,7 @@ export default function JourneyMap() {
                 onClick={() => setShowUserMenu((v) => !v)}
                 className="flex items-center gap-2 rounded-full px-1 py-1 transition-colors hover:bg-muted/50"
               >
-                <div
-                  className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
-                >
-                  {user.user_metadata?.full_name?.[0]?.toUpperCase() ??
-                    profile.name[0]?.toUpperCase() ??
-                    persona.name[0]}
-                </div>
+                <UserAvatar user={user} personaColor={persona.colorAccent} size="sm" />
                 <span className="font-mono text-xs text-muted-foreground">
                   {user.user_metadata?.full_name ?? profile.name}
                 </span>
@@ -195,15 +190,18 @@ export default function JourneyMap() {
               {showUserMenu && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-52 animate-in rounded-xl border border-border bg-card p-1 shadow-lg duration-150 fade-in slide-in-from-top-1">
                   {/* User info */}
-                  <div className="px-3 py-2.5">
-                    <p className="font-mono text-xs font-bold text-foreground truncate">
-                      {user.user_metadata?.full_name ?? profile.name}
-                    </p>
-                    {user.email && (
-                      <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
-                        {user.email}
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <UserAvatar user={user} personaColor={persona.colorAccent} size="md" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-xs font-bold text-foreground truncate">
+                        {user.user_metadata?.full_name ?? profile.name}
                       </p>
-                    )}
+                      {user.email && (
+                        <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
+                          {user.email}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="my-1 h-px bg-border" />
@@ -718,6 +716,44 @@ function buildSessionCards(
 // ─────────────────────────────────────────────
 // Helpers + sub-components
 // ─────────────────────────────────────────────
+
+function UserAvatar({
+  user,
+  personaColor,
+  size,
+}: {
+  user: User
+  personaColor: string
+  size: "sm" | "md"
+}) {
+  const avatarUrl: string | undefined = user.user_metadata?.avatar_url
+  const initials =
+    user.user_metadata?.full_name?.[0]?.toUpperCase() ??
+    user.email?.[0]?.toUpperCase() ??
+    "?"
+
+  const dim = size === "sm" ? "h-7 w-7" : "h-9 w-9"
+
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt="profile"
+        className={`${dim} rounded-full object-cover`}
+        referrerPolicy="no-referrer"
+      />
+    )
+  }
+
+  return (
+    <div
+      className={`${dim} ${personaColor} flex shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-white`}
+    >
+      {initials}
+    </div>
+  )
+}
 
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
