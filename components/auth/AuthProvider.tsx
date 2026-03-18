@@ -1,9 +1,9 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useMemo, useRef } from "react"
+import { createContext, useContext, useEffect, useState, useMemo } from "react"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
-import { pushProfileToSupabase, clearProfile } from "@/lib/storage/user"
+import { clearProfile } from "@/lib/storage/user"
 import { clearProgress } from "@/lib/storage/session"
 import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 
@@ -36,7 +36,6 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(!initialUser)
   const [isInitialized, setIsInitialized] = useState(!!initialUser)
   const supabase = useMemo(() => createClient(), [])
-  const prevUserRef = useRef<string | null>(initialUser?.id ?? null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -58,18 +57,6 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
     return () => subscription.unsubscribe()
   }, [supabase, initialUser])
 
-  useEffect(() => {
-    if (!user) {
-      prevUserRef.current = null
-      return
-    }
-    if (prevUserRef.current === user.id) return
-    prevUserRef.current = user.id
-
-    // Push onboarding profile to Supabase immediately on sign-in.
-    // Session sync + guest count clear happen in home/page.tsx.
-    pushProfileToSupabase().catch(console.error)
-  }, [user])
 
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({

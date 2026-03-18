@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import JourneyMap from "@/components/home/JourneyMap"
-import { getProfile, getProfileFromSupabase } from "@/lib/storage/user"
+import {
+  getProfile,
+  getProfileFromSupabase,
+  pushProfileToSupabase,
+  clearProfile,
+} from "@/lib/storage/user"
 import {
   getProgress,
   fetchProgressFromSupabase,
   syncProgressFromSupabase,
+  clearProgress,
 } from "@/lib/storage/session"
 import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 import { useAuth } from "@/hooks/useAuth"
@@ -17,13 +23,17 @@ import type { UserProgress } from "@/lib/storage/session"
 // ─────────────────────────────────────────────
 // /home
 //
-// Three scenarios on mount:
+// Auth user — Supabase is always the source of truth:
+//   - Profile exists in Supabase → returning user.
+//     Discard any local onboarding data (could be a re-onboard
+//     after sign-out), push guest sessions, then load from Supabase.
+//   - No Supabase profile → new user finishing onboarding.
+//     Push local profile + sessions to Supabase, then load.
+//   - Neither → redirect to /
 //
-// 1. Guest with local profile → pass localStorage data to JourneyMap
-// 2. Authenticated user → fetch profile + progress from Supabase,
-//    pass as props. localStorage is NOT used for auth user data.
-//    - If no profile found → redirect to /
-// 3. No local profile, not authenticated → redirect to /
+// Guest user — localStorage only:
+//   - Has local profile → render
+//   - No profile → redirect to /
 // ─────────────────────────────────────────────
 
 export default function HomePage() {
@@ -38,23 +48,36 @@ export default function HomePage() {
     const init = async () => {
       // ── Authenticated user ────────────────────
       if (user) {
-        // Push any guest sessions to Supabase (guest → auth transition)
-        await syncProgressFromSupabase()
-        clearGuestSessionCount()
+        const supabaseProfile = await getProfileFromSupabase()
 
-        // Fetch profile — prefer local onboarding data (just signed up),
-        // fall back to Supabase (returning user on new device)
-        const localProfile = getProfile()
-        const resolvedProfile = localProfile ?? (await getProfileFromSupabase())
+        if (supabaseProfile) {
+          // Returning user — Supabase wins, discard any local re-onboard data
+          clearProfile()
+          // Still push any guest sessions they completed before signing in
+          await syncProgressFromSupabase()
+          clearProgress()
+          clearGuestSessionCount()
+        } else {
+          // New user — push their onboarding profile and guest sessions
+          const localProfile = getProfile()
+          if (!localProfile) {
+            router.replace("/")
+            return
+          }
+          await pushProfileToSupabase()
+          await syncProgressFromSupabase()
+          clearProfile()
+          clearProgress()
+          clearGuestSessionCount()
+        }
 
+        const resolvedProfile = supabaseProfile ?? (await getProfileFromSupabase())
         if (!resolvedProfile) {
           router.replace("/")
           return
         }
 
-        // Fetch progress from Supabase — never from localStorage for auth users
         const resolvedProgress = await fetchProgressFromSupabase()
-
         setProfile(resolvedProfile)
         setProgress(resolvedProgress)
         return
