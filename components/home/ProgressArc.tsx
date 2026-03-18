@@ -19,7 +19,7 @@ export default function ProgressArc({ progress }: { progress: UserProgress }) {
   const eyeData = sessions.map((s) => s.score.eyeContactPercent)
   const compData = sessions.map((s) => s.score.composurePercent)
 
-  const streak = computeStreak(progress.sessions)
+  const best = computeBestSession(sessions)
   const avgScore = avgOf(sessions.flatMap((s) => [s.score.eyeContactPercent, s.score.composurePercent]))
   const trend = computeTrend(sessions)
 
@@ -44,13 +44,9 @@ export default function ProgressArc({ progress }: { progress: UserProgress }) {
         <LegendItem label="Composure" />
       </div>
 
-      {/* Stats */}
+      {/* Stats — no streak counter (streaks create anxiety, not confidence) */}
       <div className="grid grid-cols-3 gap-2 border-t border-border/50 pt-3">
-        <MiniStat
-          label="Streak"
-          value={streak === 0 ? "—" : `${streak}d`}
-          accent={streak >= 3}
-        />
+        <MiniStat label="Best" value={qualLabel(best)} accent={best >= 65} />
         <MiniStat label="Avg" value={qualLabel(avgScore)} />
         <MiniStat
           label="Trend"
@@ -209,33 +205,11 @@ function avgOf(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length
 }
 
-function computeStreak(sessions: StoredSession[]): number {
+function computeBestSession(sessions: StoredSession[]): number {
   if (sessions.length === 0) return 0
-  const uniqueDates = [
-    ...new Set(sessions.map((s) => s.date.split("T")[0])),
-  ].sort()
-  if (uniqueDates.length === 0) return 0
-
-  const today = new Date().toISOString().split("T")[0]
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
-  const lastDate = uniqueDates[uniqueDates.length - 1]
-
-  // Streak must include today or yesterday to be considered active
-  if (lastDate !== today && lastDate !== yesterday) return 0
-
-  let streak = 0
-  let checkDate = new Date(lastDate)
-
-  for (let i = uniqueDates.length - 1; i >= 0; i--) {
-    const expected = checkDate.toISOString().split("T")[0]
-    if (uniqueDates[i] === expected) {
-      streak++
-      checkDate = new Date(checkDate.getTime() - 86400000)
-    } else {
-      break
-    }
-  }
-  return streak
+  return Math.max(
+    ...sessions.map((s) => (s.score.eyeContactPercent + s.score.composurePercent) / 2)
+  )
 }
 
 function computeTrend(sessions: StoredSession[]): {

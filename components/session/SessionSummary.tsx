@@ -187,8 +187,9 @@ export default function SessionSummary({
         </CardContent>
       </Card>
 
-      {/* Score grid */}
-      {feedbackState !== "loading" && (
+      {/* Score grid — hidden in Phase 1 (sessions 1-3).
+          Phase 1 goal: build safety. Scores activate from Phase 2 onward. */}
+      {feedbackState !== "loading" && phase > 1 && (
         <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
           <ScoreCard
             label="Eye Contact"

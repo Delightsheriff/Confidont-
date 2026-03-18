@@ -5,6 +5,7 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react"
 import { useFaceAnalysis } from "@/hooks/useFaceAnalysis"
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis"
+import { usePersonaVoice } from "@/hooks/usePersonaVoice"
 import { DEFAULT_CONFIG } from "@/lib/session-config"
 import { generateTopics } from "@/lib/ai/topics"
 import type { SessionTopic } from "@/lib/ai/topics"
@@ -80,6 +81,10 @@ export default function SessionAnalyzer({
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [showDebugFeed, setShowDebugFeed] = useState(false)
+  const [voiceEnabled, setVoiceEnabled] = useState(false)
+
+  // Track whether the session intro has been spoken this session
+  const introSpokenRef = useRef(false)
 
   // Topic flow
   const [topics, setTopics] = useState<SessionTopic[]>([])
@@ -102,7 +107,11 @@ export default function SessionAnalyzer({
     []
   )
 
-  // ── Nudge arbiter — single coordinator ────────────────────────────
+  // ── Persona voice ──────────────────────────────────────────────────
+  const { speak, cancel: cancelVoice, isSpeaking, isSupported: voiceSupported } =
+    usePersonaVoice(persona.voiceConfig, voiceEnabled)
+
+  // Nudge arbiter — single coordinator ───────────────────────────────
   const { activeNudge, fire: fireNudge } = useNudgeArbiter()
 
   // ── Persona animation state — derived from activeNudge, no state needed
@@ -312,21 +321,39 @@ export default function SessionAnalyzer({
   const restartSession = useCallback(() => {
     stopTopicTimer()
     stopCamera()
+    cancelVoice()
+    introSpokenRef.current = false
     setIsCameraReady(false)
     setTopics([])
     setTopicIndex(0)
     setTopicSeconds(0)
     setCanAdvance(false)
     setSessionState("idle")
-  }, [stopTopicTimer, stopCamera])
+  }, [stopTopicTimer, stopCamera, cancelVoice])
+
+  // ── Voice — speak nudge messages when they fire ─────────────────────
+  // speechSynthesis is an external system — useEffect is correct here.
+  useEffect(() => {
+    if (activeNudge) speak(activeNudge.message)
+  }, [activeNudge]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Voice — speak session intro when session becomes active ─────────
+  useEffect(() => {
+    if (sessionState === "active" && !introSpokenRef.current) {
+      introSpokenRef.current = true
+      const t = setTimeout(() => speak(persona.sessionIntro), 700)
+      return () => clearTimeout(t)
+    }
+  }, [sessionState]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup
   useEffect(
     () => () => {
       stopTopicTimer()
       stopCamera()
+      cancelVoice()
     },
-    [stopTopicTimer, stopCamera]
+    [stopTopicTimer, stopCamera, cancelVoice]
   )
 
   // ── Render ─────────────────────────────────────────────────────────
@@ -361,10 +388,21 @@ export default function SessionAnalyzer({
                 ? "ready"
                 : "loading..."}
         </p>
-        <div className="w-16 text-right font-mono text-xs text-muted-foreground">
-          {sessionState === "active"
-            ? formatDuration(sessionScore.durationSeconds)
-            : ""}
+        <div className="flex w-16 items-center justify-end gap-2">
+          {sessionState === "active" && (
+            <span className="font-mono text-xs text-muted-foreground">
+              {formatDuration(sessionScore.durationSeconds)}
+            </span>
+          )}
+          {voiceSupported && (
+            <button
+              onClick={() => setVoiceEnabled((v) => !v)}
+              aria-label={voiceEnabled ? "Mute coach" : "Unmute coach"}
+              className={`transition-opacity ${voiceEnabled ? "opacity-100" : "opacity-30 hover:opacity-60"}`}
+            >
+              <VoiceIcon speaking={isSpeaking && voiceEnabled} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -649,6 +687,44 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
+// ── Voice icon ─────────────────────────────────────────────────────────
+
+function VoiceIcon({ speaking }: { speaking: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      className={`text-foreground transition-all duration-300 ${speaking ? "text-primary" : ""}`}
+    >
+      <path
+        d="M7 1.5a2 2 0 012 2v4a2 2 0 01-4 0v-4a2 2 0 012-2z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M3.5 6.5a3.5 3.5 0 007 0"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7 10v2.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      {speaking && (
+        <>
+          <circle cx="7" cy="7.5" r="0.5" fill="currentColor" className="animate-pulse" />
+        </>
+      )}
+    </svg>
+  )
 }
 
 // Map Tailwind color class to raw hex for glow effect
