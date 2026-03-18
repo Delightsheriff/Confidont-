@@ -188,9 +188,9 @@ export default function SessionSummary({
         <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
           <ScoreCard
             label="Eye Contact"
-            value={`${result.score.eyeContactPercent}%`}
+            value={qualitativePresence(result.score.eyeContactPercent)}
             status={
-              result.score.eyeContactPercent >= 70
+              result.score.eyeContactPercent >= 65
                 ? "good"
                 : result.score.eyeContactPercent >= 40
                   ? "neutral"
@@ -199,9 +199,9 @@ export default function SessionSummary({
           />
           <ScoreCard
             label="Composure"
-            value={`${result.score.composurePercent}%`}
+            value={qualitativePresence(result.score.composurePercent)}
             status={
-              result.score.composurePercent >= 70
+              result.score.composurePercent >= 65
                 ? "good"
                 : result.score.composurePercent >= 40
                   ? "neutral"
@@ -210,7 +210,7 @@ export default function SessionSummary({
           />
           <ScoreCard
             label="Filler Words"
-            value={String(result.fillerWordCount)}
+            value={qualitativeFillers(result.fillerWordCount)}
             status={
               result.fillerWordCount === 0
                 ? "good"
@@ -226,7 +226,7 @@ export default function SessionSummary({
           />
           <ScoreCard
             label="Topics"
-            value={`${result.topics.length} of ${result.topics.length}`}
+            value={`${result.topics.length} covered`}
             status="good"
           />
           <ScoreCard
@@ -296,6 +296,20 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
+function qualitativePresence(percent: number): string {
+  if (percent >= 80) return "Excellent"
+  if (percent >= 65) return "Strong"
+  if (percent >= 45) return "Developing"
+  return "Needs work"
+}
+
+function qualitativeFillers(count: number): string {
+  if (count === 0) return "Clean"
+  if (count <= 2) return "Minimal"
+  if (count <= 5) return "A few"
+  return "Frequent"
 }
 
 function ScoreCard({

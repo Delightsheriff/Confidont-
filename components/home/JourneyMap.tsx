@@ -9,7 +9,7 @@ import { PERSONAS } from "@/types/user"
 import type { UserProfile } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
-import { FREE_SESSION_LIMIT, TOTAL_VISIBLE_SESSIONS } from "@/configs/tiers"
+import { FREE_SESSION_LIMIT, SESSION_PEEK_AHEAD } from "@/configs/tiers"
 import type { User } from "@supabase/supabase-js"
 
 // ─────────────────────────────────────────────
@@ -424,9 +424,9 @@ function CardBody({
     case "completed":
       return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <ScoreBadge label="Eye" value={`${card.eyeContactPercent}%`} />
-          <ScoreBadge label="Composure" value={`${card.composurePercent}%`} />
-          <ScoreBadge label="Fillers" value={String(card.fillerWordCount)} />
+          <ScoreBadge label="Eye contact" value={qualitativePresence(card.eyeContactPercent ?? 0)} />
+          <ScoreBadge label="Composure" value={qualitativePresence(card.composurePercent ?? 0)} />
+          <ScoreBadge label="Fillers" value={qualitativeFillers(card.fillerWordCount ?? 0)} />
           {(card.pointsEarned ?? 0) > 0 && (
             <span className="font-mono text-[10px] font-semibold text-primary">
               +{card.pointsEarned}pts
@@ -716,16 +716,41 @@ function UpgradeCard({
 // Card builder
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// Qualitative labels — no raw numbers shown to users
+// ─────────────────────────────────────────────
+
+function qualitativePresence(percent: number): string {
+  if (percent >= 80) return "Excellent"
+  if (percent >= 65) return "Strong"
+  if (percent >= 45) return "Developing"
+  return "Needs work"
+}
+
+function qualitativeFillers(count: number): string {
+  if (count === 0) return "Clean"
+  if (count <= 2) return "Minimal"
+  if (count <= 5) return "A few"
+  return "Frequent"
+}
+
+// ─────────────────────────────────────────────
+// Card builder — dynamic feed, grows as user progresses
+// ─────────────────────────────────────────────
+
 function buildSessionCards(
   progress: UserProgress,
   daily: DailyStatus,
   isPremium: boolean
 ): SessionCardData[] {
-  const cards = []
   const completedCount = progress.totalSessions
-  const freeAvailable = isPremium ? TOTAL_VISIBLE_SESSIONS : FREE_SESSION_LIMIT
+  const nextSession = completedCount + 1
+  // Feed always shows all completed + SESSION_PEEK_AHEAD sessions ahead
+  const totalToShow = Math.max(SESSION_PEEK_AHEAD + 1, completedCount + SESSION_PEEK_AHEAD)
 
-  for (let i = 1; i <= TOTAL_VISIBLE_SESSIONS; i++) {
+  const cards: SessionCardData[] = []
+
+  for (let i = 1; i <= totalToShow; i++) {
     // ── Completed ──
     if (i <= completedCount) {
       const s = progress.sessions[completedCount - i]
@@ -741,46 +766,26 @@ function buildSessionCards(
       continue
     }
 
-    // ── Beyond free tier ──
-    if (i > freeAvailable) {
-      cards.push({
-        sessionNumber: i,
-        state: "locked-premium" as SessionCardState,
-      })
+    // ── Next session ──
+    if (i === nextSession) {
+      if (!isPremium && daily.isFreeCapReached) {
+        cards.push({ sessionNumber: i, state: "free-cap-reached" as SessionCardState })
+        continue
+      }
+      if (daily.isAtDailyLimit) {
+        cards.push({ sessionNumber: i, state: "available-at-limit" as SessionCardState })
+        continue
+      }
+      cards.push({ sessionNumber: i, state: "available" as SessionCardState })
       continue
     }
 
-    // ── Previous not done ──
-    if (i > completedCount + 1) {
-      cards.push({
-        sessionNumber: i,
-        state: "locked-progress" as SessionCardState,
-      })
-      continue
+    // ── Future sessions ──
+    if (!isPremium && i > FREE_SESSION_LIMIT) {
+      cards.push({ sessionNumber: i, state: "locked-premium" as SessionCardState })
+    } else {
+      cards.push({ sessionNumber: i, state: "locked-progress" as SessionCardState })
     }
-
-    // ── Next session (i === completedCount + 1) ──
-
-    // Free cap reached — no more sessions available
-    if (daily.isFreeCapReached) {
-      cards.push({
-        sessionNumber: i,
-        state: "free-cap-reached" as SessionCardState,
-      })
-      continue
-    }
-
-    // At daily soft limit — show nudge on tap
-    if (daily.isAtDailyLimit) {
-      cards.push({
-        sessionNumber: i,
-        state: "available-at-limit" as SessionCardState,
-      })
-      continue
-    }
-
-    // Fully available
-    cards.push({ sessionNumber: i, state: "available" as SessionCardState })
   }
 
   return cards

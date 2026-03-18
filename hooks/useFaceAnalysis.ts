@@ -44,6 +44,17 @@ const EYE_CONTACT_LOSS_THRESHOLD_MS = 8_000
 const FIDGET_WINDOW_SIZE = 30
 const FIDGET_THRESHOLD = 20
 const SCORE_UPDATE_INTERVAL_MS = 2_000
+const BUCKET_MS = 10_000 // group frames into 10-second windows for consistency scoring
+
+// Median is resistant to a last-second burst of good behaviour inflating the score.
+// A user who is poor for 80% of the session and excellent for 20% gets a low median.
+function medianOf(arr: number[]): number {
+  const sorted = [...arr].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
+}
 
 export function useFaceAnalysis(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -65,6 +76,13 @@ export function useFaceAnalysis(
   const fidgetWindowRef = useRef<boolean[]>([])
   const lastScoreUpdateRef = useRef<number>(0)
   const sessionStartRef = useRef<number | null>(null)
+
+  // Bucket tracking — accumulate 10-second windows for median scoring
+  const bucketDataRef = useRef<Array<{ ec: number; comp: number }>>([])
+  const bucketStartRef = useRef<number>(0)
+  const bucketEcFramesRef = useRef(0)
+  const bucketCompFramesRef = useRef(0)
+  const bucketFramesRef = useRef(0)
 
   // Config and callback refs — no stale closures in rAF
   const configRef = useRef(config)
@@ -252,6 +270,22 @@ export function useFaceAnalysis(
         if (result.lightingQuality === "harsh") emit("dim-lighting")
       }
 
+      // ── Bucket tracking — 10-second windows for median scoring ──────
+      if (bucketStartRef.current === 0) bucketStartRef.current = now
+      bucketFramesRef.current++
+      if (result.eyeContact === true) bucketEcFramesRef.current++
+      if (result.composure === true) bucketCompFramesRef.current++
+      if (now - bucketStartRef.current >= BUCKET_MS && bucketFramesRef.current > 5) {
+        bucketDataRef.current.push({
+          ec: bucketEcFramesRef.current / bucketFramesRef.current,
+          comp: bucketCompFramesRef.current / bucketFramesRef.current,
+        })
+        bucketStartRef.current = now
+        bucketEcFramesRef.current = 0
+        bucketCompFramesRef.current = 0
+        bucketFramesRef.current = 0
+      }
+
       setFrameMetrics(result)
 
       // Score throttled — no need for 60fps state updates
@@ -260,19 +294,24 @@ export function useFaceAnalysis(
         const elapsed = sessionStartRef.current
           ? (now - sessionStartRef.current) / 1000
           : 0
+
+        // Use median of completed buckets once we have 3+ (≥30s of data).
+        // Median prevents a brief good spell at the end from inflating the score.
+        const buckets = bucketDataRef.current
+        const rawEc = totalFramesRef.current > 0
+          ? eyeContactFramesRef.current / totalFramesRef.current
+          : 0
+        const rawComp = totalFramesRef.current > 0
+          ? composureFramesRef.current / totalFramesRef.current
+          : 0
+
         setSessionScore({
-          eyeContactPercent:
-            totalFramesRef.current > 0
-              ? Math.round(
-                  (eyeContactFramesRef.current / totalFramesRef.current) * 100
-                )
-              : 0,
-          composurePercent:
-            totalFramesRef.current > 0
-              ? Math.round(
-                  (composureFramesRef.current / totalFramesRef.current) * 100
-                )
-              : 0,
+          eyeContactPercent: buckets.length >= 3
+            ? Math.round(medianOf(buckets.map((b) => b.ec)) * 100)
+            : Math.round(rawEc * 100),
+          composurePercent: buckets.length >= 3
+            ? Math.round(medianOf(buckets.map((b) => b.comp)) * 100)
+            : Math.round(rawComp * 100),
           fillerWordCount: 0, // managed by useAudioAnalysis
           speechPaceAvg: null, // managed by useAudioAnalysis
           totalPoints: 0, // calculated at session end
@@ -296,6 +335,11 @@ export function useFaceAnalysis(
     positiveStreakStart.current = null
     eyeLossStartRef.current = null
     fidgetWindowRef.current = []
+    bucketDataRef.current = []
+    bucketStartRef.current = 0
+    bucketEcFramesRef.current = 0
+    bucketCompFramesRef.current = 0
+    bucketFramesRef.current = 0
     setSessionScore(INITIAL_SCORE)
 
     const predict = () => {

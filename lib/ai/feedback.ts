@@ -74,15 +74,21 @@ export async function generateFeedback(
 
   const highlight =
     eyeContactPercent >= composurePercent
-      ? `Your eye contact was at ${eyeContactPercent}% — that's real progress.`
-      : `You stayed composed and steady throughout — ${composurePercent}% composure is solid.`
+      ? eyeContactPercent >= 65
+        ? "Your eye contact was consistently strong — that reads as real presence on screen."
+        : "You were making an effort to stay with the camera — that awareness matters."
+      : composurePercent >= 65
+        ? "You stayed composed and grounded throughout — that physical stillness reads as confidence."
+        : "You were working on staying still — that self-awareness is the first step."
 
   const focusNext =
-    eyeContactPercent < composurePercent
-      ? "Next session, try to keep your gaze toward the camera a little longer."
-      : fillerWordCount > 3
-        ? "Try replacing filler words with a short pause — silence reads as confidence."
-        : "Keep building on your composure — you're finding your rhythm."
+    eyeContactPercent < 45
+      ? "Next session, try treating the camera lens as a person — look just above it if direct feels too intense."
+      : composurePercent < 45
+        ? "Notice where the restlessness lives — shoulders, hands, posture. Pick one thing to settle."
+        : fillerWordCount > 3
+          ? "Try replacing filler words with a short pause — silence reads as confidence, not hesitation."
+          : "You're building a solid foundation. Keep the consistency going."
 
   const opening =
     phase === 1

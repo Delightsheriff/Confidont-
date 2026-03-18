@@ -9,5 +9,6 @@
 // After 1 free session, users are prompted to create an account.
 export const FREE_SESSION_LIMIT = 2
 
-// Total sessions shown on home page (free + locked preview)
-export const TOTAL_VISIBLE_SESSIONS = 8
+// How many sessions ahead of the user's current position to preview on the journey feed.
+// The feed grows dynamically: completed + SESSION_PEEK_AHEAD cards always visible.
+export const SESSION_PEEK_AHEAD = 5

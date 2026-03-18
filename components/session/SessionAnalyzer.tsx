@@ -465,44 +465,42 @@ export default function SessionAnalyzer({
           </div>
         )}
 
-        {/* ── Metrics strip — minimal, bottom of stage ────────────────── */}
+        {/* ── Metrics strip — live signal dots, no numbers ─────────────── */}
         {sessionState === "active" && (
           <div className="flex items-center gap-5 font-mono text-xs text-muted-foreground">
-            {/* Eye contact dot */}
             <span className="flex items-center gap-1.5">
               <span
-                className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${
+                className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${
                   frameMetrics?.eyeContact
                     ? "bg-primary"
-                    : "bg-muted-foreground/40"
+                    : "bg-muted-foreground/30"
                 }`}
               />
-              {sessionScore.eyeContactPercent}%
+              eye contact
             </span>
-            {/* Composure dot */}
             <span className="flex items-center gap-1.5">
               <span
-                className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${
+                className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${
                   frameMetrics?.composure
                     ? "bg-primary"
-                    : "bg-muted-foreground/40"
+                    : "bg-muted-foreground/30"
                 }`}
               />
-              composure {sessionScore.composurePercent}%
+              composure
             </span>
-            {/* Filler count */}
             {fillerWordCount > 0 && (
               <span
-                className={fillerWordCount >= 5 ? "text-destructive/70" : ""}
+                className={fillerWordCount >= 5 ? "text-destructive/60" : ""}
               >
-                {fillerWordCount} filler{fillerWordCount !== 1 ? "s" : ""}
+                {fillerWordCount === 1
+                  ? "one filler"
+                  : fillerWordCount < 5
+                    ? "a few fillers"
+                    : "too many fillers"}
               </span>
             )}
-            {/* Silence indicator */}
             {silenceDuration > 3 && (
-              <span className="text-muted-foreground/50">
-                {Math.round(silenceDuration)}s pause
-              </span>
+              <span className="text-muted-foreground/40">long pause</span>
             )}
           </div>
         )}
