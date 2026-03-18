@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/hooks/useAuth"
 import AuthModal from "@/components/auth/AuthModal"
 import { generateFeedback } from "@/lib/ai/feedback"
+import type { SessionFeedback } from "@/lib/ai/feedback"
 import { saveSession } from "@/lib/storage/session"
 import type { SaveSessionResult } from "@/lib/storage/session"
 import {
@@ -46,12 +47,7 @@ export default function SessionSummary({
   const [syncResult, setSyncResult] = useState<SaveSessionResult | null>(null)
   // Lazy initializer — reads localStorage once at mount, no effect needed
   const [guestCount, setGuestCount] = useState(() => getGuestSessionCount())
-  const [feedback, setFeedback] = useState<{
-    message: string
-    highlight: string
-    focusNext: string
-    pointsEarned: number
-  } | null>(null)
+  const [feedback, setFeedback] = useState<SessionFeedback | null>(null)
 
   // Notify BetaFeedback to glow — session end is a great moment for feedback
   useEffect(() => {
@@ -90,13 +86,15 @@ export default function SessionSummary({
   const handleSave = async () => {
     if (!feedback) return
 
+    // Strip runtime-only field before persisting
+    const { aiGenerated: _, ...feedbackToStore } = feedback
     const result_ = await saveSession({
       id: `session_${Date.now()}`,
       date: new Date().toISOString(),
       phase,
       topics: result.topics,
       score: { ...result.score, fillerWordCount: result.fillerWordCount },
-      feedback,
+      feedback: feedbackToStore,
       thumbnailDataUrl: result.thumbnailDataUrl,
     })
 

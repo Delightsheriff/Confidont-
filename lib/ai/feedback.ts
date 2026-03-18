@@ -26,7 +26,7 @@ export interface SessionFeedback {
   highlight: string
   focusNext: string
   pointsEarned: number
-  aiGenerated: boolean
+  aiGenerated?: boolean  // present at runtime; absent in stored session data
 }
 
 export async function generateFeedback(
