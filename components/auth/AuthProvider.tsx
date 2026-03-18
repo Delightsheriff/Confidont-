@@ -3,8 +3,8 @@
 import { createContext, useContext, useEffect, useState, useMemo, useRef } from "react"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
-import { pushProfileToSupabase } from "@/lib/storage/user"
-import { syncProgressFromSupabase } from "@/lib/storage/session"
+import { pushProfileToSupabase, clearProfile } from "@/lib/storage/user"
+import { syncProgressFromSupabase, clearProgress } from "@/lib/storage/session"
 import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 
 interface AuthContextValue {
@@ -89,6 +89,9 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    clearProfile()
+    clearProgress()
+    clearGuestSessionCount()
     setUser(null)
   }
 
