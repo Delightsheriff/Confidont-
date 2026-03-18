@@ -2,19 +2,19 @@
 // lib/ai/topics.ts
 //
 // Topic generation for session start.
-// Stub implementation — returns hardcoded topics.
+// Calls /api/session/topics (server-side Groq).
+// Falls back to hardcoded topics if the API fails —
+// a broken AI should never block a session from starting.
 //
-// To swap: replace generateTopics internals with
-// a Vercel AI SDK call to /api/session/generate-topics
 // Nothing that imports this file needs to change.
 // ─────────────────────────────────────────────
 
 export interface SessionTopic {
   topic: string
-  prompt: string // what the persona says to introduce it
+  prompt: string
   difficulty: 1 | 2 | 3 | 4 | 5
-  targetingWeakness: string | null // internal only, never shown to user
-  durationSeconds: number // how long user speaks on this topic
+  targetingWeakness: string | null
+  durationSeconds: number
 }
 
 export interface GenerateTopicsInput {
@@ -26,16 +26,39 @@ export interface GenerateTopicsInput {
   totalSessions: number
 }
 
-// STUB — swap internals for real API call when ready
 export async function generateTopics(
   input: GenerateTopicsInput
 ): Promise<SessionTopic[]> {
-  // Simulate network latency in dev so UI loading states work
+  // Only attempt API call if key is configured
+  if (process.env.NEXT_PUBLIC_AI_ENABLED !== "false") {
+    try {
+      const res = await fetch("/api/session/topics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      })
+
+      if (res.ok) {
+        const topics: SessionTopic[] = await res.json()
+        if (Array.isArray(topics) && topics.length > 0) return topics
+      } else {
+        console.warn(
+          "[generateTopics] API returned",
+          res.status,
+          "— falling back to stub"
+        )
+      }
+    } catch (err) {
+      console.warn("[generateTopics] fetch failed — falling back to stub:", err)
+    }
+  }
+
+  // ── Fallback — hardcoded topics ───────────────────────────────────
+  // Runs in dev before GROQ_API_KEY is set, or if the API call fails.
   if (process.env.NODE_ENV === "development") {
     await new Promise((r) => setTimeout(r, 800))
   }
 
-  // Hardcoded topics by phase — real AI will personalise these
   const topicsByPhase: Record<number, SessionTopic[]> = {
     1: [
       {
@@ -119,10 +142,6 @@ export async function generateTopics(
 
   const phase = Math.min(Math.max(input.phase, 1), 4)
   const topics = topicsByPhase[phase] ?? topicsByPhase[1]
-
-  // Filter out topics the user has already completed
   const fresh = topics.filter((t) => !input.completedTopics.includes(t.topic))
-
-  // Return up to 3 topics, falling back to all if filtered too aggressively
   return (fresh.length > 0 ? fresh : topics).slice(0, 3)
 }
