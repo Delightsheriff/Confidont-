@@ -20,13 +20,31 @@ export interface UsePersonaVoiceReturn {
   isSupported: boolean
 }
 
+// Voice priority order — best quality first.
+// Google voices (Chrome) and Microsoft Neural (Edge) sound significantly
+// better than default system voices. We try them first.
 const FEMALE_VOICE_HINTS = [
-  "samantha", "zira", "karen", "moira", "tessa",
-  "fiona", "victoria", "alice", "emma", "kate",
+  // Chrome (Google TTS — best quality available in browser)
+  "google us english",
+  "google uk english female",
+  // Edge / Windows (Neural voices — second best)
+  "aria", "jenny", "michelle", "monica", "natasha",
+  "zira online", "zira",
+  // macOS / iOS
+  "samantha", "karen", "moira", "tessa", "fiona", "victoria",
+  // Fallback keywords
+  "female", "woman", "emma", "alice", "kate",
 ]
 const MALE_VOICE_HINTS = [
-  "daniel", "alex", "fred", "thomas", "oliver",
-  "arthur", "lee", "jorge", "mark", "aaron",
+  // Chrome
+  "google uk english male",
+  // Edge / Windows Neural
+  "guy", "ryan", "roger",
+  "david online", "david",
+  // macOS / iOS
+  "daniel", "alex", "oliver", "arthur",
+  // Fallback keywords
+  "male", "man", "fred", "thomas", "lee",
 ]
 
 export function usePersonaVoice(

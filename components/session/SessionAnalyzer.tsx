@@ -82,9 +82,11 @@ export default function SessionAnalyzer({
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [showDebugFeed, setShowDebugFeed] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(false)
+  const [showVoiceHint, setShowVoiceHint] = useState(false)
 
   // Track whether the session intro has been spoken this session
   const introSpokenRef = useRef(false)
+  const voiceHintShownRef = useRef(false)
 
   // Topic flow
   const [topics, setTopics] = useState<SessionTopic[]>([])
@@ -331,6 +333,18 @@ export default function SessionAnalyzer({
     setSessionState("idle")
   }, [stopTopicTimer, stopCamera, cancelVoice])
 
+  // ── Voice hint — pulse once when session is ready ───────────────────
+  // Shows a tooltip drawing attention to the voice toggle.
+  // Only fires once per mount; disappears after 3.5s.
+  useEffect(() => {
+    if (isReady && voiceSupported && !voiceHintShownRef.current) {
+      voiceHintShownRef.current = true
+      setShowVoiceHint(true)
+      const t = setTimeout(() => setShowVoiceHint(false), 3500)
+      return () => clearTimeout(t)
+    }
+  }, [isReady, voiceSupported])
+
   // ── Voice — speak nudge messages when they fire ─────────────────────
   // speechSynthesis is an external system — useEffect is correct here.
   useEffect(() => {
@@ -395,13 +409,45 @@ export default function SessionAnalyzer({
             </span>
           )}
           {voiceSupported && (
-            <button
-              onClick={() => setVoiceEnabled((v) => !v)}
-              aria-label={voiceEnabled ? "Mute coach" : "Unmute coach"}
-              className={`transition-opacity ${voiceEnabled ? "opacity-100" : "opacity-30 hover:opacity-60"}`}
-            >
-              <VoiceIcon speaking={isSpeaking && voiceEnabled} />
-            </button>
+            <div className="relative">
+              {/* Attention pulse ring — shown once on first load */}
+              {showVoiceHint && !voiceEnabled && (
+                <span className="absolute inset-0 -m-1.5 animate-ping rounded-full bg-primary/40" />
+              )}
+
+              <button
+                onClick={() => {
+                  setVoiceEnabled((v) => !v)
+                  setShowVoiceHint(false)
+                }}
+                aria-label={voiceEnabled ? "Mute coach" : "Unmute coach"}
+                className={`relative transition-all duration-300 ${
+                  voiceEnabled
+                    ? "opacity-100"
+                    : showVoiceHint
+                      ? "opacity-100"
+                      : "opacity-30 hover:opacity-70"
+                }`}
+              >
+                <VoiceIcon speaking={isSpeaking && voiceEnabled} />
+              </button>
+
+              {/* Floating hint tooltip */}
+              {showVoiceHint && !voiceEnabled && (
+                <div className="absolute right-0 top-full mt-2 w-max animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="rounded-xl border border-primary/20 bg-card px-3 py-2 shadow-lg shadow-black/10">
+                    <p className="font-mono text-[10px] text-primary">
+                      hear {persona.name}
+                    </p>
+                    <p className="font-mono text-[10px] text-muted-foreground">
+                      tap to enable voice
+                    </p>
+                  </div>
+                  {/* Arrow pointing up to the button */}
+                  <div className="absolute -top-1 right-2 h-2 w-2 rotate-45 border-l border-t border-primary/20 bg-card" />
+                </div>
+              )}
+            </div>
           )}
         </div>
       </header>
