@@ -152,7 +152,7 @@ export default function JourneyMap({
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-md">
+      <div className="sticky top-0 z-20 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <h1 className="font-mono text-lg font-bold text-primary">
             Confidont
@@ -241,7 +241,7 @@ export default function JourneyMap({
         </div>
       </div>
 
-      <div className="mx-auto max-w-lg space-y-8 px-6 py-8">
+      <div className="mx-auto max-w-lg space-y-6 px-6 py-8">
         {/* Greeting */}
         <div className="space-y-1">
           <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
@@ -265,33 +265,20 @@ export default function JourneyMap({
           />
         </div>
 
-        {/* Phase label */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-border" />
-            <span className="px-2 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-              Phase {currentPhase.id} — {currentPhase.name}
-            </span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <p className="text-center text-xs text-muted-foreground">
-            {currentPhase.description}
-          </p>
-        </div>
-
         {/* Session path */}
-        <div className="relative space-y-3">
-          <div className="absolute top-8 bottom-8 left-6.75 z-0 w-px bg-border" />
+        <div className="relative space-y-2">
+          {/* Track line — two segments: completed (primary) + remaining (border) */}
+          <div className="absolute top-8 bottom-8 left-3.5 z-0 w-px -translate-x-1/2 bg-border/60" />
 
           {cards.map((card, i) => {
-            const isPhaseStart = PHASES.some(
+            const phase = PHASES.find(
               (p) => p.startsAt === card.sessionNumber && card.sessionNumber > 1
             )
             return (
               <SessionCard
                 key={card.sessionNumber}
                 card={card}
-                isPhaseStart={isPhaseStart}
+                phaseStart={phase ?? null}
                 nextUnlockDate={daily.nextUnlockDate}
                 onTap={() => handleCardTap(card)}
                 index={i}
@@ -299,11 +286,11 @@ export default function JourneyMap({
             )
           })}
 
-          <div className="flex items-center gap-3 pt-2 pl-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border">
-              <span className="text-xs text-muted-foreground/40">∞</span>
+          <div className="flex items-center gap-3 pt-3 pl-1">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border/40">
+              <span className="text-[11px] text-muted-foreground/30">∞</span>
             </div>
-            <p className="font-mono text-xs text-muted-foreground/40">
+            <p className="font-mono text-[11px] text-muted-foreground/30">
               The journey doesn&apos;t end here.
             </p>
           </div>
@@ -362,12 +349,12 @@ export default function JourneyMap({
 
 function SessionCard({
   card,
-  isPhaseStart,
+  phaseStart,
   nextUnlockDate,
   onTap,
 }: {
   card: SessionCardData
-  isPhaseStart: boolean
+  phaseStart: (typeof PHASES)[number] | null
   nextUnlockDate: string
   onTap: () => void
   index: number
@@ -376,47 +363,52 @@ function SessionCard({
     card.state !== "completed" && card.state !== "free-cap-reached"
 
   return (
-    <div className="flex items-start gap-4">
-      {/* Node */}
-      <div className="z-10 mt-4 shrink-0">
-        <NodeIcon state={card.state} />
-      </div>
-
-      {/* Card */}
-      <button
-        onClick={isClickable ? onTap : undefined}
-        disabled={!isClickable}
-        className={`mb-1 w-full flex-1 rounded-xl border text-left transition-all duration-200 ${cardStyles[card.state]}`}
-      >
-        {isPhaseStart && (
-          <div className="px-4 pt-3 pb-0">
-            <p className="font-mono text-[9px] tracking-widest text-primary/60 uppercase">
-              {PHASES.find((p) => p.startsAt === card.sessionNumber)?.name}{" "}
-              begins
-            </p>
-          </div>
-        )}
-
-        <div className="px-4 py-3.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-1">
-              <p
-                className={`font-mono text-xs tracking-widest uppercase ${
-                  card.state === "locked-premium" ||
-                  card.state === "locked-progress" ||
-                  card.state === "free-cap-reached"
-                    ? "text-muted-foreground/40"
-                    : "text-muted-foreground"
-                }`}
-              >
-                Session {card.sessionNumber}
-              </p>
-              <CardBody card={card} nextUnlockDate={nextUnlockDate} />
-            </div>
-            <CardAction card={card} />
-          </div>
+    <div className="flex flex-col gap-0">
+      {/* Phase transition banner — sits above the card, outside the flex row */}
+      {phaseStart && (
+        <div className="mb-3 ml-11 mt-4 space-y-0.5">
+          <p className="font-mono text-[9px] tracking-widest text-primary/70 uppercase">
+            Phase {phaseStart.id} — {phaseStart.name}
+          </p>
+          <p className="font-mono text-[10px] text-muted-foreground/60">
+            {phaseStart.description}
+          </p>
         </div>
-      </button>
+      )}
+
+      <div className="flex items-start gap-3">
+        {/* Node */}
+        <div className="z-10 mt-3.5 shrink-0">
+          <NodeIcon state={card.state} />
+        </div>
+
+        {/* Card */}
+        <button
+          onClick={isClickable ? onTap : undefined}
+          disabled={!isClickable}
+          className={`mb-1 w-full flex-1 rounded-2xl border text-left transition-all duration-200 ${cardStyles[card.state]}`}
+        >
+          <div className="px-4 py-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <p
+                  className={`font-mono text-[10px] tracking-widest uppercase ${
+                    card.state === "locked-premium" ||
+                    card.state === "locked-progress" ||
+                    card.state === "free-cap-reached"
+                      ? "text-muted-foreground/30"
+                      : "text-muted-foreground/70"
+                  }`}
+                >
+                  Session {card.sessionNumber}
+                </p>
+                <CardBody card={card} nextUnlockDate={nextUnlockDate} />
+              </div>
+              <CardAction card={card} />
+            </div>
+          </div>
+        </button>
+      </div>
     </div>
   )
 }
@@ -431,40 +423,46 @@ function CardBody({
   switch (card.state) {
     case "completed":
       return (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <ScoreBadge label="Eye" value={`${card.eyeContactPercent}%`} />
           <ScoreBadge label="Composure" value={`${card.composurePercent}%`} />
           <ScoreBadge label="Fillers" value={String(card.fillerWordCount)} />
           {(card.pointsEarned ?? 0) > 0 && (
-            <span className="font-mono text-[10px] text-primary">
+            <span className="font-mono text-[10px] font-semibold text-primary">
               +{card.pointsEarned}pts
             </span>
           )}
         </div>
       )
     case "available":
-      return <p className="font-mono text-xs text-foreground">Ready to start</p>
+      return (
+        <p className="font-mono text-xs font-medium text-foreground">
+          Ready — tap to begin
+        </p>
+      )
     case "available-at-limit":
       return (
-        <p className="font-mono text-xs text-muted-foreground">
+        <p className="font-mono text-xs text-amber-500/80">
           Done for today — or keep going?
         </p>
       )
     case "free-cap-reached":
       return (
-        <p className="font-mono text-xs text-muted-foreground/50">
-          See you {nextUnlockDate} 🌙
+        <p className="font-mono text-xs text-muted-foreground/40">
+          Returns {nextUnlockDate}
         </p>
       )
     case "locked-progress":
       return (
-        <p className="font-mono text-xs text-muted-foreground/40">
-          Complete previous session first
+        <p className="font-mono text-xs text-muted-foreground/30">
+          Finish the previous session first
         </p>
       )
     case "locked-premium":
       return (
-        <p className="font-mono text-xs text-muted-foreground/40">Premium</p>
+        <p className="font-mono text-xs text-muted-foreground/30">
+          Premium only
+        </p>
       )
   }
 }
@@ -473,13 +471,13 @@ function CardAction({ card }: { card: SessionCardData }) {
   switch (card.state) {
     case "available":
       return (
-        <span className="shrink-0 rounded-full bg-primary px-4 py-1.5 font-mono text-xs font-bold text-primary-foreground">
+        <span className="shrink-0 rounded-full bg-primary px-4 py-1.5 font-mono text-xs font-bold text-primary-foreground shadow-sm shadow-primary/20">
           Start →
         </span>
       )
     case "available-at-limit":
       return (
-        <span className="shrink-0 rounded-full border border-primary/50 px-4 py-1.5 font-mono text-xs font-bold text-primary">
+        <span className="shrink-0 rounded-full border border-amber-500/40 px-4 py-1.5 font-mono text-xs font-bold text-amber-500/80">
           Start →
         </span>
       )
@@ -499,12 +497,12 @@ function CardAction({ card }: { card: SessionCardData }) {
 function NodeIcon({ state }: { state: SessionCardState }) {
   if (state === "completed") {
     return (
-      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary shadow-sm shadow-primary/30">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
           <path
             d="M2 6l3 3 5-5"
             stroke="white"
-            strokeWidth="1.5"
+            strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -514,40 +512,46 @@ function NodeIcon({ state }: { state: SessionCardState }) {
   }
   if (state === "available") {
     return (
-      <div className="flex h-7 w-7 animate-pulse items-center justify-center rounded-full border-2 border-primary bg-primary/10">
-        <div className="h-2 w-2 rounded-full bg-primary" />
+      <div className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary bg-primary/10">
+        <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary" />
       </div>
     )
   }
   if (state === "available-at-limit") {
     return (
-      <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-primary/40 bg-background">
-        <div className="h-2 w-2 rounded-full bg-primary/40" />
+      <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-amber-500/40 bg-background">
+        <div className="h-2 w-2 rounded-full bg-amber-500/60" />
       </div>
     )
   }
   if (state === "free-cap-reached") {
     return (
-      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background">
-        <span className="text-[10px]">🌙</span>
+      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/40 bg-muted/30">
+        <span className="text-[10px] opacity-50">🌙</span>
       </div>
     )
   }
+  // locked-progress or locked-premium
   return (
-    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border/50 bg-background">
-      <LockIcon className="text-muted-foreground/30" />
+    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border/40 bg-background">
+      <LockIcon className="text-muted-foreground/25" />
     </div>
   )
 }
 
 const cardStyles: Record<SessionCardState, string> = {
-  completed: "border-primary/20 bg-primary/5 cursor-default",
+  completed:
+    "border-primary/15 bg-primary/[0.03] cursor-default",
   available:
-    "border-primary/40 bg-card shadow-sm shadow-primary/10 hover:border-primary/60",
-  "available-at-limit": "border-primary/20 bg-card hover:border-primary/40",
-  "free-cap-reached": "border-border/30 bg-card/40 cursor-default opacity-60",
-  "locked-progress": "border-border/40 bg-card/40 hover:border-border/60",
-  "locked-premium": "border-border/30 bg-card/30 opacity-50 cursor-not-allowed",
+    "border-primary/50 bg-card shadow-md shadow-primary/10 hover:border-primary hover:shadow-primary/20 active:scale-[0.99]",
+  "available-at-limit":
+    "border-amber-500/30 bg-card hover:border-amber-500/50",
+  "free-cap-reached":
+    "border-border/20 bg-muted/20 cursor-default opacity-50",
+  "locked-progress":
+    "border-border/30 bg-muted/10 cursor-not-allowed opacity-50",
+  "locked-premium":
+    "border-border/20 bg-muted/10 cursor-not-allowed opacity-40",
 }
 
 // ─────────────────────────────────────────────
