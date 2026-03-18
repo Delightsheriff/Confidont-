@@ -103,17 +103,10 @@ export default function SessionAnalyzer({
   // ── Nudge arbiter — single coordinator ────────────────────────────
   const { activeNudge, fire: fireNudge } = useNudgeArbiter()
 
-  // ── Persona animation state ────────────────────────────────────────
-  const [personaState, setPersonaState] =
-    useState<PersonaAnimationState>("idle")
-  useEffect(() => {
-    if (!activeNudge) {
-      setPersonaState("idle")
-      return
-    }
-    const anim = NUDGE_TO_ANIMATION[activeNudge.type] ?? "idle"
-    setPersonaState(anim)
-  }, [activeNudge])
+  // ── Persona animation state — derived from activeNudge, no state needed
+  const personaState: PersonaAnimationState = activeNudge
+    ? (NUDGE_TO_ANIMATION[activeNudge.type] ?? "idle")
+    : "idle"
 
   // ── Face analysis — routes nudge signals to arbiter ───────────────
   const { frameMetrics, sessionScore, isReady } = useFaceAnalysis(

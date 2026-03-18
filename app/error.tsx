@@ -3,7 +3,6 @@
 // app/error.tsx
 // Global error boundary — catches unhandled runtime errors
 
-import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 interface ErrorProps {
@@ -14,9 +13,9 @@ interface ErrorProps {
 export default function ErrorPage({ error, reset }: ErrorProps) {
   const router = useRouter()
 
-  useEffect(() => {
-    console.error("[Confidont error]", error)
-  }, [error])
+  // Error boundaries render once per caught error — safe to log inline.
+  // useEffect would be equivalent but adds unnecessary indirection here.
+  console.error("[Confidont error]", error)
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6 text-foreground">

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { hasCompletedOnboarding } from "@/lib/storage/user"
-import { useAuth } from "@/hooks/useAuth"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { WaitlistForm } from "@/components/landing"
@@ -65,27 +64,17 @@ const WHO_IT_FOR = [
 
 export default function LandingPage() {
   const router = useRouter()
-  const { user, isInitialized } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
 
+  // Authenticated users are redirected to /home by the proxy before the page
+  // renders — no client-side check needed for them.
+  // Guest users who completed onboarding (have a localStorage profile) still
+  // need a client-side redirect since localStorage is unavailable server-side.
   useEffect(() => {
-    if (!isInitialized) return
-    
-    // Already authenticated with profile → go to home
     if (hasCompletedOnboarding()) {
       router.replace("/home")
-      return
     }
-    
-    // Already authenticated but no local profile → recover from Supabase
-    if (user) {
-      router.replace("/home")
-      return
-    }
-    
-    // Not authenticated, no local profile → stay on landing
-    // User will choose "Try it free" or "I already have an account"
-  }, [user, isInitialized, router])
+  }, [router])
 
   const handleTryIt = () => {
     router.push("/onboarding")
@@ -101,19 +90,10 @@ export default function LandingPage() {
     router.push("/home")
   }
 
-  // Show loading only while checking auth (rare with SSR)
-  if (!isInitialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
-  }
-
-  // Don't render anything while redirecting (prevents flash)
-  if (user || hasCompletedOnboarding()) {
-    return null
-  }
+  // Proxy already redirected authenticated users — they never reach this render.
+  // Guest users with a completed onboarding are redirected by the useEffect above.
+  // Show nothing during that brief redirect to prevent a flash.
+  if (hasCompletedOnboarding()) return null
 
   return (
     <div className="min-h-screen bg-background text-foreground">

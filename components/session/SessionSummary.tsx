@@ -38,17 +38,14 @@ export default function SessionSummary({
 
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("loading")
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [guestCount, setGuestCount] = useState(0)
+  // Lazy initializer — reads localStorage once at mount, no effect needed
+  const [guestCount, setGuestCount] = useState(() => getGuestSessionCount())
   const [feedback, setFeedback] = useState<{
     message: string
     highlight: string
     focusNext: string
     pointsEarned: number
   } | null>(null)
-
-  useEffect(() => {
-    setGuestCount(getGuestSessionCount())
-  }, [])
 
   // Load feedback on mount
   useEffect(() => {
