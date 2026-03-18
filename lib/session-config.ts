@@ -22,7 +22,9 @@ export const DEFAULT_CONFIG: FaceAnalysisConfig = {
       verticalMax: 0.65,
     },
     composure: {
-      maxMovement: 0.005,
+      // Velocity threshold in normalized units/second (frame-rate independent).
+      // 0.10 = catches deliberate head turns; ignores micro-tremors and breathing.
+      maxMovement: 0.1,
     },
     headPose: {
       maxPitch: 15,

@@ -84,6 +84,9 @@ export function useFaceAnalysis(
   const bucketCompFramesRef = useRef(0)
   const bucketFramesRef = useRef(0)
 
+  // Velocity tracking for frame-rate-independent composure measurement
+  const lastFrameTimeRef = useRef<number | null>(null)
+
   // Config and callback refs — no stale closures in rAF
   const configRef = useRef(config)
   const onNudgeRef = useRef(onNudge)
@@ -199,18 +202,23 @@ export function useFaceAnalysis(
         }
       }
 
-      // ── Composure ────────────────────────────────────────────────
+      // ── Composure (velocity-based — frame-rate independent) ─────────
+      // Measures units/second so 30fps and 60fps produce identical results.
+      // threshold.composure.maxMovement is now in normalized units/sec.
       if (metrics.composure) {
         const nose = landmarks[4]
-        let movement = 0
-        if (prevNoseRef.current) {
+        let velocity = 0
+        if (prevNoseRef.current && lastFrameTimeRef.current !== null) {
           const dx = nose.x - prevNoseRef.current.x
           const dy = nose.y - prevNoseRef.current.y
-          movement = Math.sqrt(dx * dx + dy * dy)
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          const dt = (now - lastFrameTimeRef.current) / 1000 // seconds
+          velocity = dt > 0.002 ? dist / dt : 0 // guard near-zero intervals
         }
         prevNoseRef.current = { x: nose.x, y: nose.y }
+        lastFrameTimeRef.current = now
 
-        const isMoving = movement >= thresholds.composure.maxMovement
+        const isMoving = velocity >= thresholds.composure.maxMovement
         result.composure = !isMoving
         if (!isMoving) composureFramesRef.current++
 
@@ -322,6 +330,41 @@ export function useFaceAnalysis(
     [emit]
   )
 
+  // ── No-face handler — occlusion / looking away ───────────────────
+  // Called every rAF when MediaPipe finds no landmarks.
+  // Increments total frames (penalty) but not good-metric frames,
+  // so covering the camera correctly lowers both scores.
+  const processNoFace = useCallback(() => {
+    const now = performance.now()
+    totalFramesRef.current++
+
+    // Reset velocity tracking — next valid frame shouldn't inherit stale delta
+    lastFrameTimeRef.current = null
+    prevNoseRef.current = null
+
+    // Bucket tracking — no-face frames count as missed ec + composure
+    if (bucketStartRef.current === 0) bucketStartRef.current = now
+    bucketFramesRef.current++
+    if (now - bucketStartRef.current >= BUCKET_MS && bucketFramesRef.current > 5) {
+      bucketDataRef.current.push({
+        ec: bucketEcFramesRef.current / bucketFramesRef.current,
+        comp: bucketCompFramesRef.current / bucketFramesRef.current,
+      })
+      bucketStartRef.current = now
+      bucketEcFramesRef.current = 0
+      bucketCompFramesRef.current = 0
+      bucketFramesRef.current = 0
+    }
+
+    // Sustained no-face → same nudge as eye contact lost
+    positiveStreakStart.current = null
+    if (!eyeLossStartRef.current) eyeLossStartRef.current = now
+    if (now - eyeLossStartRef.current >= EYE_CONTACT_LOSS_THRESHOLD_MS) {
+      emit("eye-contact-lost")
+      eyeLossStartRef.current = now
+    }
+  }, [emit])
+
   // ── Detection Loop ───────────────────────────────────────────────
   useEffect(() => {
     if (!landmarkerRef.current || !isSessionActive || !videoRef.current) return
@@ -332,6 +375,7 @@ export function useFaceAnalysis(
     composureFramesRef.current = 0
     totalFramesRef.current = 0
     prevNoseRef.current = null
+    lastFrameTimeRef.current = null
     positiveStreakStart.current = null
     eyeLossStartRef.current = null
     fidgetWindowRef.current = []
@@ -352,7 +396,11 @@ export function useFaceAnalysis(
         video,
         performance.now()
       )
-      if (res.faceLandmarks?.length > 0) processFrame(res.faceLandmarks[0])
+      if (res.faceLandmarks?.length > 0) {
+        processFrame(res.faceLandmarks[0])
+      } else {
+        processNoFace()
+      }
       requestRef.current = requestAnimationFrame(predict)
     }
 
@@ -363,7 +411,7 @@ export function useFaceAnalysis(
         requestRef.current = undefined
       }
     }
-  }, [isSessionActive, processFrame, videoRef])
+  }, [isSessionActive, processFrame, processNoFace, videoRef])
 
   return { frameMetrics, sessionScore, isReady }
 }
