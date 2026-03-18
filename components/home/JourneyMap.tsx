@@ -315,6 +315,7 @@ export default function JourneyMap({
             personaName={persona.name}
             userName={profile.name}
             isAuthenticated={!!user}
+            lastSessionDate={progress.lastSessionDate}
             onSignIn={() => setShowAuthModal(true)}
           />
         )}
@@ -603,6 +604,42 @@ function DayNudgeModal({
 }
 
 // ─────────────────────────────────────────────
+// Countdown hook — ticks every second until target
+// ─────────────────────────────────────────────
+
+function useCountdown(lastSessionDate: string | null): string | null {
+  const targetMs = lastSessionDate
+    ? new Date(lastSessionDate).getTime() + 24 * 60 * 60 * 1000
+    : null
+
+  const [display, setDisplay] = useState<string | null>(() =>
+    targetMs ? formatCountdown(targetMs - Date.now()) : null
+  )
+
+  useEffect(() => {
+    if (!targetMs) return
+    const tick = () => {
+      const remaining = targetMs - Date.now()
+      setDisplay(remaining > 0 ? formatCountdown(remaining) : null)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [targetMs])
+
+  return display
+}
+
+function formatCountdown(ms: number): string {
+  const totalSecs = Math.floor(ms / 1000)
+  const h = Math.floor(totalSecs / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  const s = totalSecs % 60
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`
+  return `${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`
+}
+
+// ─────────────────────────────────────────────
 // Upgrade card
 // ─────────────────────────────────────────────
 
@@ -610,13 +647,17 @@ function UpgradeCard({
   personaName,
   userName,
   isAuthenticated,
+  lastSessionDate,
   onSignIn,
 }: {
   personaName: string
   userName: string
   isAuthenticated: boolean
+  lastSessionDate: string | null
   onSignIn: () => void
 }) {
+  const countdown = useCountdown(lastSessionDate)
+
   if (isAuthenticated) {
     return (
       <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-5">
@@ -631,9 +672,12 @@ function UpgradeCard({
         <button className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90">
           Upgrade to Premium
         </button>
-        <p className="text-center font-mono text-[10px] text-muted-foreground">
-          Cancel anytime.
-        </p>
+        {countdown && (
+          <p className="text-center font-mono text-[10px] text-muted-foreground">
+            Next free session in{" "}
+            <span className="tabular-nums text-foreground">{countdown}</span>
+          </p>
+        )}
       </div>
     )
   }
@@ -654,9 +698,12 @@ function UpgradeCard({
       >
         Sign in to continue
       </button>
-      <p className="text-center font-mono text-[10px] text-muted-foreground">
-        Already have an account? Sign in to pick up where you left off.
-      </p>
+      {countdown && (
+        <p className="text-center font-mono text-[10px] text-muted-foreground">
+          Or come back in{" "}
+          <span className="tabular-nums text-foreground">{countdown}</span>
+        </p>
+      )}
     </div>
   )
 }
