@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { PERSONAS } from "@/types/user"
 import type { Goal, SessionsPerDay } from "@/types/user"
-import { getProfile, updateProfile } from "@/lib/storage/user"
+import { getProfile, getProfileFromSupabase, updateProfile } from "@/lib/storage/user"
 import { PersonaDisplay } from "@/components/persona/PersonaSVGs"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -39,17 +39,26 @@ export default function SettingsPage() {
   const [saving, setSaving]                 = useState(false)
   const [saved, setSaved]                   = useState(false)
   const [loaded, setLoaded]                 = useState(false)
+  // Original values for dirty-checking — kept in state since auth users have no localStorage
+  const [original, setOriginal]             = useState<{ personaId: string; goal: Goal; sessionsPerDay: SessionsPerDay } | null>(null)
 
   useEffect(() => {
-    const profile = getProfile()
-    if (!profile) {
-      router.replace("/onboarding")
-      return
+    const load = async () => {
+      // Try localStorage first (guest users), then Supabase (auth users whose
+      // localStorage was cleared by home/page.tsx after sign-in).
+      const local = getProfile()
+      const profile = local ?? (await getProfileFromSupabase())
+      if (!profile) {
+        router.replace("/onboarding")
+        return
+      }
+      setPersonaId(profile.personaId)
+      setGoal(profile.goal)
+      setSessionsPerDay(profile.sessionsPerDay)
+      setOriginal({ personaId: profile.personaId, goal: profile.goal, sessionsPerDay: profile.sessionsPerDay })
+      setLoaded(true)
     }
-    setPersonaId(profile.personaId)
-    setGoal(profile.goal)
-    setSessionsPerDay(profile.sessionsPerDay)
-    setLoaded(true)
+    load()
   }, [router])
 
   const handleSave = async () => {
@@ -69,11 +78,11 @@ export default function SettingsPage() {
     )
   }
 
-  const isDirty = (() => {
-    const p = getProfile()
-    if (!p) return false
-    return p.personaId !== personaId || p.goal !== goal || p.sessionsPerDay !== sessionsPerDay
-  })()
+  const isDirty = original !== null && (
+    original.personaId !== personaId ||
+    original.goal !== goal ||
+    original.sessionsPerDay !== sessionsPerDay
+  )
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
