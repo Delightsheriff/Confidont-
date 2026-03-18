@@ -37,31 +37,34 @@ export function AmaraSVG({
     >
       <style>{`
         @keyframes amara-nod {
-          0%, 100% { transform: translateY(0); }
-          30% { transform: translateY(4px); }
-          60% { transform: translateY(-2px); }
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25%  { transform: translateY(5px) rotate(4deg); }
+          55%  { transform: translateY(-2px) rotate(-1deg); }
+          75%  { transform: translateY(3px) rotate(2deg); }
         }
         @keyframes amara-tilt {
           0%, 100% { transform: rotate(0deg); }
-          40% { transform: rotate(-8deg); }
-          70% { transform: rotate(4deg); }
+          40% { transform: rotate(-10deg); }
+          70% { transform: rotate(5deg); }
         }
         @keyframes amara-wave {
-          0%, 100% { transform: rotate(0deg); transform-origin: 90px 72px; }
-          20% { transform: rotate(-20deg); transform-origin: 90px 72px; }
-          40% { transform: rotate(15deg); transform-origin: 90px 72px; }
-          60% { transform: rotate(-15deg); transform-origin: 90px 72px; }
-          80% { transform: rotate(10deg); transform-origin: 90px 72px; }
+          0%   { transform: rotate(-5deg); }
+          20%  { transform: rotate(-32deg); }
+          45%  { transform: rotate(12deg); }
+          65%  { transform: rotate(-28deg); }
+          85%  { transform: rotate(6deg); }
+          100% { transform: rotate(-5deg); }
         }
         @keyframes amara-clap {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-6px); }
-          50% { transform: translateX(6px); }
-          75% { transform: translateX(-3px); }
+          0%, 100% { transform: translateY(0) scale(1); }
+          20%  { transform: translateY(-6px) scale(1.02); }
+          40%  { transform: translateY(0) scale(1); }
+          60%  { transform: translateY(-4px) scale(1.01); }
+          80%  { transform: translateY(0) scale(1); }
         }
         @keyframes amara-breathe {
-          0%, 100% { transform: scaleY(1); transform-origin: center bottom; }
-          50% { transform: scaleY(1.015); transform-origin: center bottom; }
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-2px); }
         }
       `}</style>
 
@@ -74,12 +77,13 @@ export function AmaraSVG({
         style={{
           animation:
             state === "nod"
-              ? "amara-nod 0.7s ease-in-out"
+              ? "amara-nod 0.8s ease-in-out"
               : state === "tilt"
-                ? "amara-tilt 0.8s ease-in-out"
+                ? "amara-tilt 0.9s ease-in-out"
                 : state === "clap"
-                  ? "amara-clap 0.5s ease-in-out 2"
+                  ? "amara-clap 0.5s ease-in-out 0s 2"
                   : "amara-breathe 3s ease-in-out infinite",
+          transformOrigin: state === "nod" ? "60px 110px" : "60px 65px",
         }}
       >
         {/* Body / shoulders */}
@@ -160,34 +164,19 @@ export function AmaraSVG({
 
       {/* Wave arm — separate group for independent animation */}
       {state === "wave" && (
-        <g style={{ animation: "amara-wave 1s ease-in-out 1.5" }}>
-          <path
-            d="M86 78 Q96 68 100 58 Q103 50 100 45"
-            stroke="#c8714a"
-            strokeWidth="7"
-            strokeLinecap="round"
-            fill="none"
-          />
-          {/* Hand */}
-          <ellipse cx="100" cy="43" rx="7" ry="6" fill="#c8714a" />
-          <path
-            d="M96 38 Q98 32 100 30"
-            stroke="#c8714a"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          <path
-            d="M100 37 Q102 31 104 29"
-            stroke="#c8714a"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          <path
-            d="M104 39 Q106 33 107 32"
-            stroke="#c8714a"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
+        <g style={{ transformOrigin: "86px 88px", animation: "amara-wave 1.1s ease-in-out 0s 2" }}>
+          {/* Upper arm */}
+          <path d="M86 88 Q96 76 100 64" stroke="#c8714a" strokeWidth="8" strokeLinecap="round" fill="none" />
+          {/* Forearm */}
+          <path d="M100 64 Q104 54 102 46" stroke="#c8714a" strokeWidth="7" strokeLinecap="round" fill="none" />
+          {/* Palm */}
+          <ellipse cx="101" cy="43" rx="6.5" ry="5.5" fill="#c8714a" />
+          {/* Fingers */}
+          <path d="M97 39 Q96 33 97 29" stroke="#c8714a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M101 38 Q101 32 102 28" stroke="#c8714a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M105 40 Q106 34 107 30" stroke="#c8714a" strokeWidth="3" strokeLinecap="round" fill="none" />
+          {/* Thumb */}
+          <path d="M96 44 Q92 41 91 38" stroke="#c8714a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
         </g>
       )}
     </svg>
@@ -212,9 +201,10 @@ export function JamesSVG({
     >
       <style>{`
         @keyframes james-nod {
-          0%, 100% { transform: translateY(0); }
-          30% { transform: translateY(4px); }
-          60% { transform: translateY(-2px); }
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25%  { transform: translateY(5px) rotate(4deg); }
+          55%  { transform: translateY(-2px) rotate(-1deg); }
+          75%  { transform: translateY(3px) rotate(2deg); }
         }
         @keyframes james-tilt {
           0%, 100% { transform: rotate(0deg); }
@@ -222,21 +212,23 @@ export function JamesSVG({
           70% { transform: rotate(3deg); }
         }
         @keyframes james-wave {
-          0%, 100% { transform: rotate(0deg); transform-origin: 88px 74px; }
-          20% { transform: rotate(-18deg); transform-origin: 88px 74px; }
-          40% { transform: rotate(14deg); transform-origin: 88px 74px; }
-          60% { transform: rotate(-12deg); transform-origin: 88px 74px; }
-          80% { transform: rotate(8deg); transform-origin: 88px 74px; }
+          0%   { transform: rotate(-5deg); }
+          20%  { transform: rotate(-32deg); }
+          45%  { transform: rotate(12deg); }
+          65%  { transform: rotate(-28deg); }
+          85%  { transform: rotate(6deg); }
+          100% { transform: rotate(-5deg); }
         }
         @keyframes james-clap {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          50% { transform: translateX(5px); }
-          75% { transform: translateX(-3px); }
+          0%, 100% { transform: translateY(0) scale(1); }
+          20%  { transform: translateY(-6px) scale(1.02); }
+          40%  { transform: translateY(0) scale(1); }
+          60%  { transform: translateY(-4px) scale(1.01); }
+          80%  { transform: translateY(0) scale(1); }
         }
         @keyframes james-breathe {
-          0%, 100% { transform: scaleY(1); }
-          50% { transform: scaleY(1.012); transform-origin: center bottom; }
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-2px); }
         }
       `}</style>
 
@@ -249,12 +241,13 @@ export function JamesSVG({
         style={{
           animation:
             state === "nod"
-              ? "james-nod 0.7s ease-in-out"
+              ? "james-nod 0.8s ease-in-out"
               : state === "tilt"
-                ? "james-tilt 0.8s ease-in-out"
+                ? "james-tilt 0.9s ease-in-out"
                 : state === "clap"
-                  ? "james-clap 0.5s ease-in-out 2"
+                  ? "james-clap 0.5s ease-in-out 0s 2"
                   : "james-breathe 3.5s ease-in-out infinite",
+          transformOrigin: state === "nod" ? "60px 110px" : "60px 65px",
         }}
       >
         {/* Body / shoulders — broader, shirt collar visible */}
@@ -267,9 +260,9 @@ export function JamesSVG({
           opacity="0.9"
         />
         {/* Left arm */}
-        <path d="M24 93 Q16 105 18 117" stroke="#c49a72" strokeWidth="9" strokeLinecap="round" fill="none" />
+        <path d="M24 93 Q16 105 18 117" stroke="#bcd6f0" strokeWidth="9" strokeLinecap="round" fill="none" />
         {/* Right arm */}
-        <path d="M96 93 Q104 105 102 117" stroke="#c49a72" strokeWidth="9" strokeLinecap="round" fill="none" />
+        <path d="M96 93 Q104 105 102 117" stroke="#bcd6f0" strokeWidth="9" strokeLinecap="round" fill="none" />
         {/* Collar */}
         <path
           d="M48 92 L60 98 L72 92"
@@ -330,15 +323,19 @@ export function JamesSVG({
       </g>
 
       {state === "wave" && (
-        <g style={{ animation: "james-wave 1s ease-in-out 1.5" }}>
-          <path
-            d="M84 80 Q94 70 98 60 Q101 52 98 47"
-            stroke="#c49a72"
-            strokeWidth="7"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <ellipse cx="98" cy="45" rx="6" ry="5.5" fill="#c49a72" />
+        <g style={{ transformOrigin: "88px 90px", animation: "james-wave 1.1s ease-in-out 0s 2" }}>
+          {/* Upper arm — broader/taller build */}
+          <path d="M88 90 Q98 78 102 66" stroke="#bcd6f0" strokeWidth="9" strokeLinecap="round" fill="none" />
+          {/* Forearm */}
+          <path d="M102 66 Q106 56 104 48" stroke="#bcd6f0" strokeWidth="7" strokeLinecap="round" fill="none" />
+          {/* Palm */}
+          <ellipse cx="103" cy="45" rx="6.5" ry="5.5" fill="#c49a72" />
+          {/* Fingers */}
+          <path d="M99 41 Q98 35 99 31" stroke="#c49a72" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M103 40 Q103 34 104 30" stroke="#c49a72" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M107 42 Q108 36 109 32" stroke="#c49a72" strokeWidth="3" strokeLinecap="round" fill="none" />
+          {/* Thumb */}
+          <path d="M98 46 Q94 43 93 40" stroke="#c49a72" strokeWidth="3.5" strokeLinecap="round" fill="none" />
         </g>
       )}
     </svg>
@@ -363,34 +360,34 @@ export function ZoeSVG({
     >
       <style>{`
         @keyframes zoe-nod {
-          0%, 100% { transform: translateY(0); }
-          25% { transform: translateY(5px); }
-          55% { transform: translateY(-3px); }
-          80% { transform: translateY(2px); }
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25%  { transform: translateY(5px) rotate(4deg); }
+          55%  { transform: translateY(-2px) rotate(-1deg); }
+          75%  { transform: translateY(3px) rotate(2deg); }
         }
         @keyframes zoe-tilt {
           0%, 100% { transform: rotate(0deg); }
-          35% { transform: rotate(-10deg); }
+          35% { transform: rotate(-12deg); }
           65% { transform: rotate(6deg); }
         }
         @keyframes zoe-wave {
-          0%, 100% { transform: rotate(0deg); transform-origin: 88px 72px; }
-          15% { transform: rotate(-25deg); transform-origin: 88px 72px; }
-          35% { transform: rotate(20deg); transform-origin: 88px 72px; }
-          55% { transform: rotate(-18deg); transform-origin: 88px 72px; }
-          75% { transform: rotate(14deg); transform-origin: 88px 72px; }
-          90% { transform: rotate(-8deg); transform-origin: 88px 72px; }
+          0%   { transform: rotate(-5deg); }
+          20%  { transform: rotate(-32deg); }
+          45%  { transform: rotate(12deg); }
+          65%  { transform: rotate(-28deg); }
+          85%  { transform: rotate(6deg); }
+          100% { transform: rotate(-5deg); }
         }
         @keyframes zoe-clap {
-          0%, 100% { transform: translateX(0) translateY(0); }
-          20% { transform: translateX(-8px) translateY(-3px); }
-          40% { transform: translateX(8px) translateY(-3px); }
-          60% { transform: translateX(-5px) translateY(-1px); }
-          80% { transform: translateX(5px) translateY(-1px); }
+          0%, 100% { transform: translateY(0) scale(1); }
+          20%  { transform: translateY(-6px) scale(1.02); }
+          40%  { transform: translateY(0) scale(1); }
+          60%  { transform: translateY(-4px) scale(1.01); }
+          80%  { transform: translateY(0) scale(1); }
         }
         @keyframes zoe-breathe {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-1px); }
+          50%      { transform: translateY(-2px); }
         }
       `}</style>
 
@@ -403,12 +400,13 @@ export function ZoeSVG({
         style={{
           animation:
             state === "nod"
-              ? "zoe-nod 0.6s ease-in-out"
+              ? "zoe-nod 0.8s ease-in-out"
               : state === "tilt"
-                ? "zoe-tilt 0.7s ease-in-out"
+                ? "zoe-tilt 0.9s ease-in-out"
                 : state === "clap"
-                  ? "zoe-clap 0.4s ease-in-out 3"
+                  ? "zoe-clap 0.5s ease-in-out 0s 2"
                   : "zoe-breathe 2.8s ease-in-out infinite",
+          transformOrigin: state === "nod" ? "60px 110px" : "60px 65px",
         }}
       >
         {/* Body — casual hoodie */}
@@ -421,9 +419,9 @@ export function ZoeSVG({
           opacity="0.85"
         />
         {/* Left arm */}
-        <path d="M27 93 Q19 104 21 116" stroke="#e8b48a" strokeWidth="8" strokeLinecap="round" fill="none" />
+        <path d="M27 93 Q19 104 21 116" stroke="#e8a840" strokeWidth="8" strokeLinecap="round" fill="none" />
         {/* Right arm */}
-        <path d="M93 93 Q101 104 99 116" stroke="#e8b48a" strokeWidth="8" strokeLinecap="round" fill="none" />
+        <path d="M93 93 Q101 104 99 116" stroke="#e8a840" strokeWidth="8" strokeLinecap="round" fill="none" />
         <path
           d="M42 95 Q60 100 78 95 L75 108 Q60 112 45 108 Z"
           fill="#e8a840"
@@ -508,15 +506,19 @@ export function ZoeSVG({
       </g>
 
       {state === "wave" && (
-        <g style={{ animation: "zoe-wave 0.9s ease-in-out 2" }}>
-          <path
-            d="M85 78 Q95 65 99 54 Q102 45 98 40"
-            stroke="#e8b48a"
-            strokeWidth="7"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <ellipse cx="98" cy="38" rx="7" ry="6" fill="#e8b48a" />
+        <g style={{ transformOrigin: "85px 88px", animation: "zoe-wave 1.1s ease-in-out 0s 3" }}>
+          {/* Upper arm — exuberant, high raise */}
+          <path d="M85 88 Q95 74 99 60" stroke="#e8a840" strokeWidth="8" strokeLinecap="round" fill="none" />
+          {/* Forearm — reaches high */}
+          <path d="M99 60 Q103 50 101 42" stroke="#e8a840" strokeWidth="7" strokeLinecap="round" fill="none" />
+          {/* Palm */}
+          <ellipse cx="100" cy="39" rx="6.5" ry="5.5" fill="#e8b48a" />
+          {/* Fingers */}
+          <path d="M96 35 Q95 29 96 25" stroke="#e8b48a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M100 34 Q100 28 101 24" stroke="#e8b48a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M104 36 Q105 30 106 26" stroke="#e8b48a" strokeWidth="3" strokeLinecap="round" fill="none" />
+          {/* Thumb */}
+          <path d="M95 40 Q91 37 90 34" stroke="#e8b48a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
         </g>
       )}
     </svg>
@@ -541,31 +543,34 @@ export function DrNkosiSVG({
     >
       <style>{`
         @keyframes nkosi-nod {
-          0%, 100% { transform: translateY(0); }
-          30% { transform: translateY(3px); }
-          60% { transform: translateY(-1.5px); }
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25%  { transform: translateY(5px) rotate(4deg); }
+          55%  { transform: translateY(-2px) rotate(-1deg); }
+          75%  { transform: translateY(3px) rotate(2deg); }
         }
         @keyframes nkosi-tilt {
           0%, 100% { transform: rotate(0deg); }
           40% { transform: rotate(-5deg); }
-          70% { transform: rotate(3deg); }
+          70% { transform: rotate(2.5deg); }
         }
         @keyframes nkosi-wave {
-          0%, 100% { transform: rotate(0deg); transform-origin: 86px 76px; }
-          20% { transform: rotate(-14deg); transform-origin: 86px 76px; }
-          40% { transform: rotate(11deg); transform-origin: 86px 76px; }
-          60% { transform: rotate(-10deg); transform-origin: 86px 76px; }
-          80% { transform: rotate(6deg); transform-origin: 86px 76px; }
+          0%   { transform: rotate(-5deg); }
+          20%  { transform: rotate(-32deg); }
+          45%  { transform: rotate(12deg); }
+          65%  { transform: rotate(-28deg); }
+          85%  { transform: rotate(6deg); }
+          100% { transform: rotate(-5deg); }
         }
         @keyframes nkosi-clap {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-4px); }
-          50% { transform: translateX(4px); }
-          75% { transform: translateX(-2px); }
+          0%, 100% { transform: translateY(0) scale(1); }
+          20%  { transform: translateY(-6px) scale(1.02); }
+          40%  { transform: translateY(0) scale(1); }
+          60%  { transform: translateY(-4px) scale(1.01); }
+          80%  { transform: translateY(0) scale(1); }
         }
         @keyframes nkosi-breathe {
-          0%, 100% { transform: scaleY(1); }
-          50% { transform: scaleY(1.01); transform-origin: center bottom; }
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-2px); }
         }
       `}</style>
 
@@ -582,8 +587,9 @@ export function DrNkosiSVG({
               : state === "tilt"
                 ? "nkosi-tilt 0.9s ease-in-out"
                 : state === "clap"
-                  ? "nkosi-clap 0.6s ease-in-out 2"
+                  ? "nkosi-clap 0.5s ease-in-out 0s 2"
                   : "nkosi-breathe 4s ease-in-out infinite",
+          transformOrigin: state === "nod" ? "60px 110px" : "60px 65px",
         }}
       >
         {/* Body — suit jacket */}
@@ -713,15 +719,19 @@ export function DrNkosiSVG({
       </g>
 
       {state === "wave" && (
-        <g style={{ animation: "nkosi-wave 1.1s ease-in-out 1.5" }}>
-          <path
-            d="M84 80 Q93 70 96 60 Q99 52 96 47"
-            stroke="#5a3010"
-            strokeWidth="7"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <ellipse cx="96" cy="45" rx="6" ry="5.5" fill="#5a3010" />
+        <g style={{ transformOrigin: "84px 92px", animation: "nkosi-wave 1.4s ease-in-out 0s 2" }}>
+          {/* Upper arm — dignified, more restrained raise */}
+          <path d="M84 92 Q93 80 96 68" stroke="#1a3a2a" strokeWidth="9" strokeLinecap="round" fill="none" />
+          {/* Forearm — less raised than others, more dignified */}
+          <path d="M96 68 Q99 59 98 52" stroke="#1a3a2a" strokeWidth="7" strokeLinecap="round" fill="none" />
+          {/* Palm */}
+          <ellipse cx="97" cy="49" rx="6.5" ry="5.5" fill="#5a3010" />
+          {/* Fingers */}
+          <path d="M93 45 Q92 39 93 35" stroke="#5a3010" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M97 44 Q97 38 98 34" stroke="#5a3010" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M101 46 Q102 40 103 36" stroke="#5a3010" strokeWidth="3" strokeLinecap="round" fill="none" />
+          {/* Thumb */}
+          <path d="M92 50 Q88 47 87 44" stroke="#5a3010" strokeWidth="3.5" strokeLinecap="round" fill="none" />
         </g>
       )}
     </svg>
@@ -746,31 +756,34 @@ export function PriyaSVG({
     >
       <style>{`
         @keyframes priya-nod {
-          0%, 100% { transform: translateY(0); }
-          30% { transform: translateY(4px); }
-          60% { transform: translateY(-2px); }
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25%  { transform: translateY(5px) rotate(4deg); }
+          55%  { transform: translateY(-2px) rotate(-1deg); }
+          75%  { transform: translateY(3px) rotate(2deg); }
         }
         @keyframes priya-tilt {
           0%, 100% { transform: rotate(0deg); }
-          40% { transform: rotate(-7deg); }
+          40% { transform: rotate(-8deg); }
           70% { transform: rotate(4deg); }
         }
         @keyframes priya-wave {
-          0%, 100% { transform: rotate(0deg); transform-origin: 88px 74px; }
-          20% { transform: rotate(-20deg); transform-origin: 88px 74px; }
-          40% { transform: rotate(16deg); transform-origin: 88px 74px; }
-          60% { transform: rotate(-14deg); transform-origin: 88px 74px; }
-          80% { transform: rotate(9deg); transform-origin: 88px 74px; }
+          0%   { transform: rotate(-5deg); }
+          20%  { transform: rotate(-32deg); }
+          45%  { transform: rotate(12deg); }
+          65%  { transform: rotate(-28deg); }
+          85%  { transform: rotate(6deg); }
+          100% { transform: rotate(-5deg); }
         }
         @keyframes priya-clap {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-7px); }
-          50% { transform: translateX(7px); }
-          75% { transform: translateX(-4px); }
+          0%, 100% { transform: translateY(0) scale(1); }
+          20%  { transform: translateY(-6px) scale(1.02); }
+          40%  { transform: translateY(0) scale(1); }
+          60%  { transform: translateY(-4px) scale(1.01); }
+          80%  { transform: translateY(0) scale(1); }
         }
         @keyframes priya-breathe {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-1.5px); }
+          50%      { transform: translateY(-2px); }
         }
       `}</style>
 
@@ -783,12 +796,13 @@ export function PriyaSVG({
         style={{
           animation:
             state === "nod"
-              ? "priya-nod 0.65s ease-in-out"
+              ? "priya-nod 0.8s ease-in-out"
               : state === "tilt"
-                ? "priya-tilt 0.75s ease-in-out"
+                ? "priya-tilt 0.9s ease-in-out"
                 : state === "clap"
-                  ? "priya-clap 0.45s ease-in-out 2"
+                  ? "priya-clap 0.5s ease-in-out 0s 2"
                   : "priya-breathe 3.2s ease-in-out infinite",
+          transformOrigin: state === "nod" ? "60px 110px" : "60px 65px",
         }}
       >
         {/* Body — sharp blazer */}
@@ -885,15 +899,19 @@ export function PriyaSVG({
       </g>
 
       {state === "wave" && (
-        <g style={{ animation: "priya-wave 0.95s ease-in-out 1.5" }}>
-          <path
-            d="M84 78 Q94 67 98 56 Q101 48 98 43"
-            stroke="#c4845a"
-            strokeWidth="7"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <ellipse cx="98" cy="41" rx="6.5" ry="6" fill="#c4845a" />
+        <g style={{ transformOrigin: "86px 90px", animation: "priya-wave 1.1s ease-in-out 0s 2" }}>
+          {/* Upper arm — crisp, precise */}
+          <path d="M86 90 Q96 78 100 66" stroke="#6d3d8a" strokeWidth="8" strokeLinecap="round" fill="none" />
+          {/* Forearm */}
+          <path d="M100 66 Q104 56 102 48" stroke="#6d3d8a" strokeWidth="7" strokeLinecap="round" fill="none" />
+          {/* Palm */}
+          <ellipse cx="101" cy="45" rx="6.5" ry="5.5" fill="#c4845a" />
+          {/* Fingers */}
+          <path d="M97 41 Q96 35 97 31" stroke="#c4845a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M101 40 Q101 34 102 30" stroke="#c4845a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M105 42 Q106 36 107 32" stroke="#c4845a" strokeWidth="3" strokeLinecap="round" fill="none" />
+          {/* Thumb */}
+          <path d="M96 46 Q92 43 91 40" stroke="#c4845a" strokeWidth="3.5" strokeLinecap="round" fill="none" />
         </g>
       )}
     </svg>
