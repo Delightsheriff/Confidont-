@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { getProfile } from "@/lib/storage/user"
 import { getProgress } from "@/lib/storage/session"
@@ -79,13 +79,32 @@ const PHASES = [
 
 export default function JourneyMap() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const profile = getProfile()
   const progress = getProgress()
 
   const [toast, setToast] = useState<string | null>(null)
   const [showDayNudge, setShowDayNudge] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showUserMenu) return
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [showUserMenu])
+
+  const handleSignOut = async () => {
+    setShowUserMenu(false)
+    await signOut()
+    router.replace("/")
+  }
 
   const fireToast = useCallback((msg: string) => {
     setToast(msg)
@@ -139,29 +158,90 @@ export default function JourneyMap() {
           <h1 className="font-mono text-lg font-bold text-primary">
             Confidont
           </h1>
-          <button
-            onClick={() => !user && setShowAuthModal(true)}
-            className="flex items-center gap-2"
-          >
-            <div
-              className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
-            >
-              {user
-                ? (user.user_metadata?.full_name?.[0]?.toUpperCase() ??
+
+          {user ? (
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowUserMenu((v) => !v)}
+                className="flex items-center gap-2 rounded-full px-1 py-1 transition-colors hover:bg-muted/50"
+              >
+                <div
+                  className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
+                >
+                  {user.user_metadata?.full_name?.[0]?.toUpperCase() ??
                     profile.name[0]?.toUpperCase() ??
-                    persona.name[0])
-                : persona.name[0]}
+                    persona.name[0]}
+                </div>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {user.user_metadata?.full_name ?? profile.name}
+                </span>
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  className={`text-muted-foreground/50 transition-transform duration-200 ${showUserMenu ? "rotate-180" : ""}`}
+                >
+                  <path
+                    d="M2 3.5l3 3 3-3"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-52 animate-in rounded-xl border border-border bg-card p-1 shadow-lg duration-150 fade-in slide-in-from-top-1">
+                  {/* User info */}
+                  <div className="px-3 py-2.5">
+                    <p className="font-mono text-xs font-bold text-foreground truncate">
+                      {user.user_metadata?.full_name ?? profile.name}
+                    </p>
+                    {user.email && (
+                      <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="my-1 h-px bg-border" />
+
+                  {/* Sign out */}
+                  <button
+                    onClick={handleSignOut}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 font-mono text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path
+                        d="M4.5 2H2.5A1 1 0 001.5 3v6a1 1 0 001 1h2M8 8.5L10.5 6 8 3.5M4.5 6h6"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
-            {user ? (
-              <span className="font-mono text-xs text-muted-foreground">
-                {user.user_metadata?.full_name ?? profile.name}
-              </span>
-            ) : (
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="flex items-center gap-2"
+            >
+              <div
+                className={`h-7 w-7 rounded-full ${persona.colorAccent} flex items-center justify-center font-mono text-xs font-bold text-white`}
+              >
+                {persona.name[0]}
+              </div>
               <span className="rounded-full bg-primary/10 px-3 py-1 font-mono text-[10px] font-bold text-primary transition-colors hover:bg-primary/20">
                 sign in
               </span>
-            )}
-          </button>
+            </button>
+          )}
         </div>
       </div>
 
