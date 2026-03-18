@@ -47,7 +47,8 @@ export function getDailyStatus(
   // Hard block only at ceiling — daily limit never blocks
   const canStartSession = !isFreeCapReached
 
-  const midnight = getMidnight()
+  // Unlock time = 24h after the last session, not midnight
+  const lastSessionDate = progress.lastSessionDate
 
   return {
     sessionsUsedToday: sessionsToday,
@@ -55,22 +56,37 @@ export function getDailyStatus(
     isAtDailyLimit,
     isFreeCapReached,
     canStartSession,
-    nextUnlockDate: getNextUnlockLabel(midnight),
+    nextUnlockDate: getNextUnlockLabel(lastSessionDate),
   }
 }
 
-function getMidnight(): Date {
-  const d = new Date()
-  d.setHours(24, 0, 0, 0)
-  return d
-}
+// 24h after the last session timestamp
+function getNextUnlockLabel(lastSessionDate: string | null): string {
+  if (!lastSessionDate) return "tomorrow"
 
-function getNextUnlockLabel(midnight: Date): string {
-  const diffH = (midnight.getTime() - Date.now()) / 3600000
-  if (diffH <= 12) return "tomorrow"
-  return midnight.toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
+  const unlockAt = new Date(
+    new Date(lastSessionDate).getTime() + 24 * 60 * 60 * 1000
+  )
+  const now = new Date()
+
+  if (unlockAt <= now) return "now"
+
+  const timeStr = unlockAt.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   })
+
+  const todayStr = now.toDateString()
+  const tomorrowStr = new Date(now.getTime() + 86400000).toDateString()
+
+  if (unlockAt.toDateString() === todayStr) return `at ${timeStr} today`
+  if (unlockAt.toDateString() === tomorrowStr) return `at ${timeStr} tomorrow`
+  return (
+    unlockAt.toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+    }) + ` at ${timeStr}`
+  )
 }

@@ -7,8 +7,10 @@ import SessionAnalyzer, {
   type SessionResult,
 } from "@/components/session/SessionAnalyzer"
 import SessionSummary from "@/components/session/SessionSummary"
-import { getProgress } from "@/lib/storage/session"
-import { getProfile } from "@/lib/storage/user"
+import { getProgress, fetchProgressFromSupabase } from "@/lib/storage/session"
+import { getProfile, getProfileFromSupabase } from "@/lib/storage/user"
+import { getDailyStatus } from "@/lib/logic/dailyLimit"
+import { useAuth } from "@/hooks/useAuth"
 import { PERSONAS } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { UserProfile } from "@/types/user"
@@ -16,30 +18,60 @@ import type { UserProfile } from "@/types/user"
 // Force dynamic rendering — this page reads localStorage and must never SSR
 export const dynamic = "force-dynamic"
 
+const IS_PREMIUM = false
+
 type PageState = "checking" | "session" | "summary"
 
 export default function SessionPage() {
   const router = useRouter()
+  const { user, isInitialized } = useAuth()
 
   const [pageState, setPageState] = useState<PageState>("checking")
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [progress, setProgress] = useState<UserProgress | null>(null)
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null)
 
-  // Guard runs client-side only — localStorage is safe here
   useEffect(() => {
-    const p = getProfile()
-    if (!p) {
-      router.replace("/onboarding")
-      return
+    if (!isInitialized) return
+
+    const init = async () => {
+      let resolvedProfile: UserProfile | null
+      let resolvedProgress: UserProgress
+
+      if (user) {
+        // Auth user — source of truth is Supabase
+        resolvedProfile = await getProfileFromSupabase()
+        if (!resolvedProfile) {
+          router.replace("/")
+          return
+        }
+        resolvedProgress = await fetchProgressFromSupabase()
+      } else {
+        // Guest — source of truth is localStorage
+        resolvedProfile = getProfile()
+        if (!resolvedProfile) {
+          router.replace("/")
+          return
+        }
+        resolvedProgress = getProgress()
+      }
+
+      // Block if free cap is reached — must not bypass via direct URL
+      const daily = getDailyStatus(resolvedProgress, resolvedProfile, IS_PREMIUM)
+      if (daily.isFreeCapReached) {
+        router.replace("/home")
+        return
+      }
+
+      setProfile(resolvedProfile)
+      setProgress(resolvedProgress)
+      setPageState("session")
     }
-    setProfile(p)
-    setProgress(getProgress())
-    setPageState("session")
-  }, [router])
+
+    init()
+  }, [user, isInitialized, router])
 
   if (pageState === "checking" || !profile || !progress) {
-    // Minimal loading — avoids flash of wrong content
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />

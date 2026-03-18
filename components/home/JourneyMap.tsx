@@ -311,9 +311,10 @@ export default function JourneyMap({
 
         {/* Upgrade card — only shown when free cap is reached */}
         {daily.isFreeCapReached && (
-          <UpgradeCard 
-            personaName={persona.name} 
+          <UpgradeCard
+            personaName={persona.name}
             userName={profile.name}
+            isAuthenticated={!!user}
             onSignIn={() => setShowAuthModal(true)}
           />
         )}
@@ -608,12 +609,35 @@ function DayNudgeModal({
 function UpgradeCard({
   personaName,
   userName,
+  isAuthenticated,
   onSignIn,
 }: {
   personaName: string
   userName: string
+  isAuthenticated: boolean
   onSignIn: () => void
 }) {
+  if (isAuthenticated) {
+    return (
+      <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+        <div className="space-y-1">
+          <p className="font-mono text-xs tracking-widest text-primary uppercase">
+            You&apos;re on a roll, {userName}
+          </p>
+          <p className="font-mono text-sm leading-relaxed text-foreground">
+            You&apos;ve used your free sessions. Upgrade to keep training with {personaName} — unlimited sessions, no daily cap.
+          </p>
+        </div>
+        <button className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90">
+          Upgrade to Premium
+        </button>
+        <p className="text-center font-mono text-[10px] text-muted-foreground">
+          Cancel anytime.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-5">
       <div className="space-y-1">
@@ -624,7 +648,7 @@ function UpgradeCard({
           {personaName} has more to show you. Sign in to unlock full access and keep your progress across devices.
         </p>
       </div>
-      <button 
+      <button
         onClick={onSignIn}
         className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90"
       >
