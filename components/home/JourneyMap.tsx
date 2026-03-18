@@ -10,7 +10,7 @@ import { PERSONAS } from "@/types/user"
 import type { UserProfile } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
-import { FREE_SESSION_LIMIT, SESSION_PEEK_AHEAD } from "@/configs/tiers"
+import { FREE_SESSION_LIMIT, SESSION_PEEK_AHEAD, BETA_MODE } from "@/configs/tiers"
 import type { User } from "@supabase/supabase-js"
 import {
   DropdownMenu,
@@ -47,7 +47,7 @@ import { Separator } from "@/components/ui/separator"
 // User can always choose to keep going.
 // ─────────────────────────────────────────────
 
-const IS_PREMIUM = false
+const IS_PREMIUM = BETA_MODE
 
 type SessionCardState =
   | "completed"
@@ -658,12 +658,12 @@ function UpgradeCard({
             You&apos;re on a roll, {userName}
           </p>
           <p className="font-mono text-sm leading-relaxed text-foreground">
-            You&apos;ve used your free sessions. Upgrade to keep training with {personaName} — unlimited sessions, no daily cap.
+            Premium is coming — unlimited sessions, no cap, full {personaName} coaching. You&apos;ll be first to know.
           </p>
         </div>
-        <button className="w-full rounded-full bg-primary py-2.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90">
-          Upgrade to Premium
-        </button>
+        <div className="w-full rounded-full border border-primary/30 py-2.5 text-center font-mono text-sm font-bold text-primary/60">
+          Coming soon
+        </div>
         {countdown && (
           <p className="text-center font-mono text-[10px] text-muted-foreground">
             Next free session in{" "}
@@ -681,7 +681,7 @@ function UpgradeCard({
           Keep going, {userName}
         </p>
         <p className="font-mono text-sm leading-relaxed text-foreground">
-          {personaName} has more to show you. Sign in to unlock full access and keep your progress across devices.
+          {personaName} has more to show you. Sign in to keep your progress across devices.
         </p>
       </div>
       <button
@@ -690,12 +690,6 @@ function UpgradeCard({
       >
         Sign in to continue
       </button>
-      {countdown && (
-        <p className="text-center font-mono text-[10px] text-muted-foreground">
-          Or come back in{" "}
-          <span className="tabular-nums text-foreground">{countdown}</span>
-        </p>
-      )}
     </div>
   )
 }

@@ -15,11 +15,12 @@ import { useAuth } from "@/hooks/useAuth"
 import { PERSONAS } from "@/types/user"
 import type { UserProgress } from "@/lib/storage/session"
 import type { UserProfile } from "@/types/user"
+import { BETA_MODE } from "@/configs/tiers"
 
 // Force dynamic rendering — this page reads localStorage and must never SSR
 export const dynamic = "force-dynamic"
 
-const IS_PREMIUM = false
+const IS_PREMIUM = BETA_MODE
 
 type PageState = "checking" | "session" | "summary"
 

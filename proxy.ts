@@ -20,7 +20,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { updateSession } from "./lib/supabase/proxy"
-import { FREE_SESSION_LIMIT } from "./configs/tiers"
+import { FREE_SESSION_LIMIT, BETA_MODE } from "./configs/tiers"
 
 const GUARDED = new Set(["/", "/session"])
 
@@ -70,7 +70,7 @@ export async function proxy(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
 
-    if ((count ?? 0) >= FREE_SESSION_LIMIT) {
+    if (!BETA_MODE && (count ?? 0) >= FREE_SESSION_LIMIT) {
       return NextResponse.redirect(new URL("/home", request.url))
     }
   }
