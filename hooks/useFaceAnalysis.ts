@@ -7,30 +7,25 @@ import type {
   FaceAnalysisConfig,
   FrameMetrics,
   SessionScore,
-  Nudge,
   NudgeType,
 } from "@/types/session"
-import { NUDGE_MESSAGES } from "@/lib/session-config"
 
 // ─────────────────────────────────────────────
 // useFaceAnalysis
 //
-// Core detection hook. Knows nothing about UI.
-// Config-driven — enable/disable metrics without
-// touching detection logic.
+// Core detection hook. Knows nothing about UI or nudge policy.
+// All nudge signals are emitted via onNudge — the arbiter
+// (useNudgeArbiter) owns cooldowns, caps, and mutual exclusion.
 //
 // CRITICAL: The video element must stay in the DOM
 // and be rendered (not display:none) for MediaPipe
 // to receive valid frames.
 // Use: opacity-0 absolute pointer-events-none
-// instead of className="hidden"
 // ─────────────────────────────────────────────
 
 export interface UseFaceAnalysisReturn {
   frameMetrics: FrameMetrics | null
   sessionScore: SessionScore
-  activeNudge: Nudge | null
-  nudgeCount: number
   isReady: boolean
 }
 
@@ -45,68 +40,43 @@ const INITIAL_SCORE: SessionScore = {
 
 type Landmark = { x: number; y: number; z: number }
 
-// Sustained eye-contact-loss before nudging (ms)
 const EYE_CONTACT_LOSS_THRESHOLD_MS = 8_000
-
-// Fidget rolling window: nudge only on sustained movement
-// Must be moving in FIDGET_THRESHOLD of last FIDGET_WINDOW_SIZE frames
-const FIDGET_WINDOW_SIZE = 30 // ~0.5s at 60fps
+const FIDGET_WINDOW_SIZE = 30
 const FIDGET_THRESHOLD = 20
-
-// Score update throttle — no need to setState 60x/sec
 const SCORE_UPDATE_INTERVAL_MS = 2_000
-
-// Per-type nudge cooldowns
-const PER_TYPE_COOLDOWN_MS: Record<NudgeType, number> = {
-  "eye-contact-lost": 30_000,
-  "speech-too-fast": 25_000,
-  "speech-too-slow": 25_000,
-  "long-silence": 20_000,
-  "filler-word-spike": 20_000,
-  fidgeting: 25_000,
-  "head-tilted": 30_000,
-  "dim-lighting": 60_000,
-  "positive-streak": 30_000,
-}
 
 export function useFaceAnalysis(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   isSessionActive: boolean,
-  config: FaceAnalysisConfig
+  config: FaceAnalysisConfig,
+  onNudge?: (type: NudgeType) => void // routed to useNudgeArbiter at call site
 ): UseFaceAnalysisReturn {
   const [isReady, setIsReady] = useState(false)
   const [frameMetrics, setFrameMetrics] = useState<FrameMetrics | null>(null)
   const [sessionScore, setSessionScore] = useState<SessionScore>(INITIAL_SCORE)
-  const [activeNudge, setActiveNudge] = useState<Nudge | null>(null)
-  const [nudgeCount, setNudgeCount] = useState(0)
 
   const landmarkerRef = useRef<FaceLandmarker | null>(null)
   const requestRef = useRef<number | undefined>(undefined)
   const prevNoseRef = useRef<{ x: number; y: number } | null>(null)
 
-  // Frame accumulators — written in rAF, never trigger re-renders
   const eyeContactFramesRef = useRef(0)
   const composureFramesRef = useRef(0)
   const totalFramesRef = useRef(0)
-
-  // Fidget rolling window (circular buffer of boolean)
   const fidgetWindowRef = useRef<boolean[]>([])
-
-  // Score throttle
   const lastScoreUpdateRef = useRef<number>(0)
-
-  // Session timing
   const sessionStartRef = useRef<number | null>(null)
 
-  // Live config ref — rAF loop never closes over stale config
+  // Config and callback refs — no stale closures in rAF
   const configRef = useRef(config)
+  const onNudgeRef = useRef(onNudge)
   useEffect(() => {
     configRef.current = config
   }, [config])
+  useEffect(() => {
+    onNudgeRef.current = onNudge
+  }, [onNudge])
 
-  // Nudge refs — all state needed by fireNudge lives here
-  const nudgeCountRef = useRef(0)
-  const perTypeLastNudgeRef = useRef<Partial<Record<NudgeType, number>>>({})
+  // Sustained tracking
   const eyeLossStartRef = useRef<number | null>(null)
   const positiveStreakStart = useRef<number | null>(null)
 
@@ -133,7 +103,7 @@ export function useFaceAnalysis(
           setIsReady(true)
         }
       } catch (err) {
-        console.error("MediaPipe setup failed:", err)
+        console.error("[Confidont] MediaPipe setup failed:", err)
       }
     }
     setup()
@@ -142,31 +112,13 @@ export function useFaceAnalysis(
     }
   }, [])
 
-  // ── Nudge dispatcher ─────────────────────────────────────────────────
-  // Stable ([] deps). All decisions made via refs — safe inside rAF.
-  const fireNudge = useCallback((type: NudgeType) => {
-    const now = performance.now()
-    const cfg = configRef.current
-    const cap = cfg.thresholds.nudge.sessionCap ?? 4
+  // ── Signal emitter — delegates to arbiter ───────────────────────
+  // Stable — reads callback via ref. Safe inside rAF.
+  const emit = useCallback((type: NudgeType) => {
+    onNudgeRef.current?.(type)
+  }, [])
 
-    if (nudgeCountRef.current >= cap) return
-    const lastFired = perTypeLastNudgeRef.current[type] ?? 0
-    if (now - lastFired < PER_TYPE_COOLDOWN_MS[type]) return
-
-    const msgs = NUDGE_MESSAGES[type]
-    const message = msgs[Math.floor(Math.random() * msgs.length)]
-
-    nudgeCountRef.current++
-    perTypeLastNudgeRef.current[type] = now
-
-    setNudgeCount(nudgeCountRef.current)
-    setActiveNudge({ type, message, timestamp: now })
-    setTimeout(() => setActiveNudge(null), 6_500)
-  }, []) // stable
-
-  // ── Per-frame processor ───────────────────────────────────────────────
-  // Stable — reads live state only via refs. Re-renders don't recreate it.
-  // Therefore the detection loop effect only runs when isSessionActive changes.
+  // ── Per-frame processor ──────────────────────────────────────────
   const processFrame = useCallback(
     (landmarks: Landmark[]) => {
       const { metrics, thresholds } = configRef.current
@@ -187,7 +139,7 @@ export function useFaceAnalysis(
         cameraAngle: null,
       }
 
-      // ── Eye Contact ────────────────────────────────────────
+      // ── Eye Contact ──────────────────────────────────────────────
       if (metrics.eyeContact) {
         const hGaze = (iris: Landmark, inner: Landmark, outer: Landmark) =>
           (iris.x - inner.x) / (outer.x - inner.x)
@@ -216,20 +168,20 @@ export function useFaceAnalysis(
             now - positiveStreakStart.current >=
             thresholds.nudge.positiveStreakSeconds * 1000
           ) {
-            fireNudge("positive-streak")
+            emit("positive-streak")
             positiveStreakStart.current = now
           }
         } else {
           positiveStreakStart.current = null
           if (!eyeLossStartRef.current) eyeLossStartRef.current = now
           if (now - eyeLossStartRef.current >= EYE_CONTACT_LOSS_THRESHOLD_MS) {
-            fireNudge("eye-contact-lost")
-            eyeLossStartRef.current = now // reset window; per-type cooldown prevents spam
+            emit("eye-contact-lost")
+            eyeLossStartRef.current = now
           }
         }
       }
 
-      // ── Composure ─────────────────────────────────────────
+      // ── Composure ────────────────────────────────────────────────
       if (metrics.composure) {
         const nose = landmarks[4]
         let movement = 0
@@ -244,21 +196,19 @@ export function useFaceAnalysis(
         result.composure = !isMoving
         if (!isMoving) composureFramesRef.current++
 
-        // Rolling window — nudge only on sustained movement, not a twitch
         fidgetWindowRef.current.push(isMoving)
-        if (fidgetWindowRef.current.length > FIDGET_WINDOW_SIZE) {
+        if (fidgetWindowRef.current.length > FIDGET_WINDOW_SIZE)
           fidgetWindowRef.current.shift()
-        }
         if (
           fidgetWindowRef.current.length === FIDGET_WINDOW_SIZE &&
           fidgetWindowRef.current.filter(Boolean).length >= FIDGET_THRESHOLD
         ) {
-          fireNudge("fidgeting")
-          fidgetWindowRef.current = [] // reset after nudge
+          emit("fidgeting")
+          fidgetWindowRef.current = []
         }
       }
 
-      // ── Head Pose ──────────────────────────────────────────
+      // ── Head Pose ────────────────────────────────────────────────
       if (metrics.headPose) {
         const nose = landmarks[4]
         const center = landmarks[168]
@@ -269,11 +219,12 @@ export function useFaceAnalysis(
         if (
           Math.abs(yaw) > thresholds.headPose.maxYaw ||
           Math.abs(pitch) > thresholds.headPose.maxPitch
-        )
-          fireNudge("head-tilted")
+        ) {
+          emit("head-tilted")
+        }
       }
 
-      // ── Mouth Movement ─────────────────────────────────────
+      // ── Mouth Movement ───────────────────────────────────────────
       if (metrics.mouthMovement) {
         result.mouthMovement = Math.min(
           Math.abs(landmarks[14].y - landmarks[13].y) * 10,
@@ -281,14 +232,14 @@ export function useFaceAnalysis(
         )
       }
 
-      // ── Camera Angle ───────────────────────────────────────
+      // ── Camera Angle ─────────────────────────────────────────────
       if (metrics.cameraAngle) {
         const y = landmarks[4].y
         result.cameraAngle =
           y < 0.25 ? "too-high" : y > 0.75 ? "too-low" : "eye-level"
       }
 
-      // ── Lighting Quality ───────────────────────────────────
+      // ── Lighting Quality ─────────────────────────────────────────
       if (metrics.lightingQuality) {
         const zs = [
           landmarks[1],
@@ -298,13 +249,12 @@ export function useFaceAnalysis(
         ].map((p) => p.z)
         const zRange = Math.max(...zs) - Math.min(...zs)
         result.lightingQuality = zRange > 0.15 ? "harsh" : "good"
-        if (result.lightingQuality === "harsh") fireNudge("dim-lighting")
+        if (result.lightingQuality === "harsh") emit("dim-lighting")
       }
 
-      // Frame metrics update on every frame (drives live visual indicators)
       setFrameMetrics(result)
 
-      // Score update throttled to every 2s — score display doesn't need 60fps
+      // Score throttled — no need for 60fps state updates
       if (now - lastScoreUpdateRef.current >= SCORE_UPDATE_INTERVAL_MS) {
         lastScoreUpdateRef.current = now
         const elapsed = sessionStartRef.current
@@ -330,14 +280,13 @@ export function useFaceAnalysis(
         })
       }
     },
-    [fireNudge]
-  ) // stable — fireNudge is stable, reads config via ref
+    [emit]
+  )
 
-  // ── Detection Loop ────────────────────────────────────────────────────
+  // ── Detection Loop ───────────────────────────────────────────────
   useEffect(() => {
     if (!landmarkerRef.current || !isSessionActive || !videoRef.current) return
 
-    // Full reset on session start
     sessionStartRef.current = performance.now()
     lastScoreUpdateRef.current = 0
     eyeContactFramesRef.current = 0
@@ -347,9 +296,6 @@ export function useFaceAnalysis(
     positiveStreakStart.current = null
     eyeLossStartRef.current = null
     fidgetWindowRef.current = []
-    nudgeCountRef.current = 0
-    perTypeLastNudgeRef.current = {}
-    setNudgeCount(0)
     setSessionScore(INITIAL_SCORE)
 
     const predict = () => {
@@ -373,8 +319,7 @@ export function useFaceAnalysis(
         requestRef.current = undefined
       }
     }
-    // processFrame is stable — this effect only re-runs on isSessionActive change
   }, [isSessionActive, processFrame, videoRef])
 
-  return { frameMetrics, sessionScore, activeNudge, nudgeCount, isReady }
+  return { frameMetrics, sessionScore, isReady }
 }
