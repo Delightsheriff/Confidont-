@@ -66,6 +66,10 @@ interface SessionCardData {
   fillerWordCount?: number
   pointsEarned?: number
   date?: string
+  thumbnailDataUrl?: string | null
+  feedbackMessage?: string | null
+  feedbackHighlight?: string | null
+  feedbackFocusNext?: string | null
 }
 
 const PHASES = [
@@ -107,6 +111,7 @@ export default function JourneyMap({
 
   const [showDayNudge, setShowDayNudge] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [selectedSessionNum, setSelectedSessionNum] = useState<number | null>(null)
 
   const handleSignOut = async () => {
     await signOut()
@@ -128,6 +133,9 @@ export default function JourneyMap({
 
   const handleCardTap = (card: SessionCardData) => {
     switch (card.state) {
+      case "completed":
+        setSelectedSessionNum(card.sessionNumber)
+        break
       case "available":
         router.push("/session")
         break
@@ -141,15 +149,16 @@ export default function JourneyMap({
         fireToast("Unlock premium to access this session")
         break
       case "free-cap-reached":
-        // Guest user - prompt to sign in to continue
-        if (!user) {
-          setShowAuthModal(true)
-        }
+        if (!user) setShowAuthModal(true)
         break
       default:
         break
     }
   }
+
+  const selectedCard = selectedSessionNum !== null
+    ? cards.find((c) => c.sessionNumber === selectedSessionNum) ?? null
+    : null
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -263,8 +272,14 @@ export default function JourneyMap({
           />
         </div>
 
-        {/* Progress arc — shown once user has ≥ 2 sessions */}
+        {/* Milestone card — celebrates hitting a session landmark */}
+        <MilestoneCard progress={progress} personaName={persona.name} />
+
+        {/* Progress arc */}
         <ProgressArc progress={progress} />
+
+        {/* Look how far you've come — appears at session 10+ */}
+        <LookHowFarCard progress={progress} personaName={persona.name} />
 
         {/* Session path */}
         <div className="relative space-y-2">
@@ -281,6 +296,7 @@ export default function JourneyMap({
                 card={card}
                 phaseStart={phase ?? null}
                 nextUnlockDate={daily.nextUnlockDate}
+                personaName={persona.name}
                 onTap={() => handleCardTap(card)}
                 index={i}
               />
@@ -310,6 +326,13 @@ export default function JourneyMap({
 
         <div className="h-8" />
       </div>
+
+      {/* Session detail drawer */}
+      <SessionDetailDrawer
+        card={selectedCard}
+        personaName={persona.name}
+        onDismiss={() => setSelectedSessionNum(null)}
+      />
 
       {/* Daily limit nudge — soft, user chooses */}
       <DayNudgeModal
@@ -344,16 +367,17 @@ function SessionCard({
   card,
   phaseStart,
   nextUnlockDate,
+  personaName,
   onTap,
 }: {
   card: SessionCardData
   phaseStart: (typeof PHASES)[number] | null
   nextUnlockDate: string
+  personaName: string
   onTap: () => void
   index: number
 }) {
-  const isClickable =
-    card.state !== "completed" && card.state !== "free-cap-reached"
+  const isClickable = card.state !== "free-cap-reached"
 
   return (
     <div className="flex flex-col gap-0">
@@ -395,7 +419,7 @@ function SessionCard({
                 >
                   Session {card.sessionNumber}
                 </p>
-                <CardBody card={card} nextUnlockDate={nextUnlockDate} />
+                <CardBody card={card} nextUnlockDate={nextUnlockDate} personaName={personaName} />
               </div>
               <CardAction card={card} />
             </div>
@@ -409,40 +433,55 @@ function SessionCard({
 function CardBody({
   card,
   nextUnlockDate,
+  personaName,
 }: {
   card: SessionCardData
   nextUnlockDate: string
+  personaName: string
 }) {
   switch (card.state) {
     case "completed":
       return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <ScoreBadge label="Eye contact" value={qualitativePresence(card.eyeContactPercent ?? 0)} />
-          <ScoreBadge label="Composure" value={qualitativePresence(card.composurePercent ?? 0)} />
-          <ScoreBadge label="Fillers" value={qualitativeFillers(card.fillerWordCount ?? 0)} />
-          {(card.pointsEarned ?? 0) > 0 && (
-            <span className="font-mono text-[10px] font-semibold text-primary">
-              +{card.pointsEarned}pts
-            </span>
-          )}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <ScoreBadge label="Eye contact" value={qualitativePresence(card.eyeContactPercent ?? 0)} />
+            <ScoreBadge label="Composure" value={qualitativePresence(card.composurePercent ?? 0)} />
+            <ScoreBadge label="Fillers" value={qualitativeFillers(card.fillerWordCount ?? 0)} />
+            {(card.pointsEarned ?? 0) > 0 && (
+              <span className="font-mono text-[10px] font-semibold text-primary">
+                +{card.pointsEarned}pts
+              </span>
+            )}
+          </div>
+          <p className="font-mono text-[10px] text-muted-foreground/40">Tap to review →</p>
         </div>
       )
     case "available":
       return (
-        <p className="font-mono text-xs font-medium text-foreground">
-          Ready — tap to begin
-        </p>
+        <div className="space-y-0.5">
+          <p className="font-mono text-xs font-medium text-foreground">
+            {personaName} is ready for you
+          </p>
+          <p className="font-mono text-[10px] text-muted-foreground/60">
+            Session {card.sessionNumber} · tap to begin
+          </p>
+        </div>
       )
     case "available-at-limit":
       return (
-        <p className="font-mono text-xs text-amber-500/80">
-          Done for today — or keep going?
-        </p>
+        <div className="space-y-0.5">
+          <p className="font-mono text-xs text-amber-500/80">
+            You hit today&apos;s goal
+          </p>
+          <p className="font-mono text-[10px] text-muted-foreground/60">
+            Keep going anyway — {personaName}&apos;s still here
+          </p>
+        </div>
       )
     case "free-cap-reached":
       return (
         <p className="font-mono text-xs text-muted-foreground/40">
-          Returns {nextUnlockDate}
+          {personaName} returns {nextUnlockDate}
         </p>
       )
     case "locked-progress":
@@ -475,11 +514,27 @@ function CardAction({ card }: { card: SessionCardData }) {
         </span>
       )
     case "completed":
-      return card.date ? (
-        <p className="shrink-0 font-mono text-[10px] text-muted-foreground/40">
-          {formatDate(card.date)}
-        </p>
-      ) : null
+      return (
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {card.thumbnailDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={card.thumbnailDataUrl}
+              alt={`Session ${card.sessionNumber} thumbnail`}
+              className="h-10 w-16 rounded-lg object-cover opacity-80"
+            />
+          ) : (
+            <div className="flex h-10 w-16 items-center justify-center rounded-lg bg-muted/40">
+              <span className="font-mono text-[9px] text-muted-foreground/30">no preview</span>
+            </div>
+          )}
+          {card.date && (
+            <p className="font-mono text-[9px] text-muted-foreground/40">
+              {formatDate(card.date)}
+            </p>
+          )}
+        </div>
+      )
     case "locked-premium":
       return <LockIcon className="shrink-0 text-muted-foreground/30" />
     default:
@@ -548,6 +603,342 @@ const cardStyles: Record<SessionCardState, string> = {
 }
 
 // ─────────────────────────────────────────────
+// MilestoneCard — celebrates hitting a session landmark
+// Shows the most recently achieved milestone permanently.
+// ─────────────────────────────────────────────
+
+const MILESTONES: {
+  n: number
+  title: string
+  lines: Record<string, string>
+}[] = [
+  {
+    n: 1,
+    title: "You started.",
+    lines: {
+      Amara: "That's the hardest session. Most people don't do it.",
+      James: "Session 1 logged. The foundation is set.",
+      Zoe: "ok you actually did it. that's huge.",
+      "Dr. Nkosi": "Every journey has a first step. This was yours.",
+      Priya: "You started. That's already ahead of 90% of people.",
+    },
+  },
+  {
+    n: 3,
+    title: "3 sessions in.",
+    lines: {
+      Amara: "You came back twice. That means this is real for you.",
+      James: "Three sessions. A pattern is forming.",
+      Zoe: "three sessions?? you're not just trying anymore, you're doing.",
+      "Dr. Nkosi": "Repetition is how the brain rewires. You're rewiring.",
+      Priya: "3 sessions means you didn't quit. Most do. You didn't.",
+    },
+  },
+  {
+    n: 5,
+    title: "5 sessions.",
+    lines: {
+      Amara: "Your camera doesn't scare you like it used to. You can feel it.",
+      James: "Five sessions. The habit is forming whether you notice it or not.",
+      Zoe: "five sessions in and honestly? your camera energy is different.",
+      "Dr. Nkosi": "Discomfort decreases with exposure. You are proving this.",
+      Priya: "Halfway to 10. You're not experimenting anymore — you're training.",
+    },
+  },
+  {
+    n: 10,
+    title: "10 sessions.",
+    lines: {
+      Amara: "Double digits. You've done more intentional camera work than most people ever will.",
+      James: "10 sessions logged. The data is telling a story.",
+      Zoe: "10 sessions!! you literally became a different person on camera and you know it.",
+      "Dr. Nkosi": "Ten sessions of deliberate practice. The research is on your side now.",
+      Priya: "10 sessions. You're not here to try it out anymore. You're here to get good.",
+    },
+  },
+  {
+    n: 20,
+    title: "20 sessions.",
+    lines: {
+      Amara: "Twenty sessions of showing up for yourself. I'm genuinely proud of you.",
+      James: "20 sessions. This is no longer an experiment — it's who you are.",
+      Zoe: "TWENTY. you've done more intentional camera practice than most professionals. no joke.",
+      "Dr. Nkosi": "Twenty sessions represents genuine commitment. The results are earned.",
+      Priya: "20 sessions in. At this point, the camera is just a tool. You're in charge.",
+    },
+  },
+]
+
+function MilestoneCard({
+  progress,
+  personaName,
+}: {
+  progress: UserProgress
+  personaName: string
+}) {
+  // Find the highest milestone the user has reached
+  const achieved = [...MILESTONES]
+    .reverse()
+    .find((m) => progress.totalSessions >= m.n)
+
+  if (!achieved) return null
+
+  const message = achieved.lines[personaName] ?? achieved.lines["Amara"]
+
+  return (
+    <div className="rounded-2xl border border-primary/30 bg-primary/[0.06] px-4 py-3.5 space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="text-primary text-xs">✦</span>
+        <p className="font-mono text-[10px] tracking-widest text-primary uppercase">
+          {achieved.title}
+        </p>
+      </div>
+      <p className="font-mono text-xs leading-relaxed text-foreground/80">
+        {message}
+      </p>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// LookHowFarCard — appears at session 10+
+// Shows first session vs recent scores side by side.
+// ─────────────────────────────────────────────
+
+function LookHowFarCard({
+  progress,
+  personaName,
+}: {
+  progress: UserProgress
+  personaName: string
+}) {
+  if (progress.totalSessions < 10) return null
+
+  const chronological = [...progress.sessions].reverse()
+  const first = chronological[0]
+  const recentThree = chronological.slice(-3)
+  if (!first || recentThree.length === 0) return null
+
+  const recentEye = Math.round(
+    recentThree.reduce((a, s) => a + s.score.eyeContactPercent, 0) / recentThree.length
+  )
+  const recentComp = Math.round(
+    recentThree.reduce((a, s) => a + s.score.composurePercent, 0) / recentThree.length
+  )
+  const eyeDiff = recentEye - first.score.eyeContactPercent
+  const compDiff = recentComp - first.score.composurePercent
+
+  // Only show if there's a meaningful story to tell
+  if (Math.abs(eyeDiff) < 5 && Math.abs(compDiff) < 5) return null
+
+  const INTROS: Record<string, string> = {
+    Amara: "Look how far you've come.",
+    James: "The data from session 1 vs now.",
+    Zoe: "ok wait look at this though.",
+    "Dr. Nkosi": "Consider where you began.",
+    Priya: "This is the proof.",
+  }
+  const intro = INTROS[personaName] ?? INTROS["Amara"]
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+        {intro}
+      </p>
+
+      {/* Thumbnail comparison */}
+      {(first.thumbnailDataUrl || recentThree[recentThree.length - 1]?.thumbnailDataUrl) && (
+        <div className="flex items-center gap-3">
+          <div className="flex-1 space-y-1">
+            <p className="font-mono text-[9px] text-muted-foreground/50 uppercase tracking-widest">Session 1</p>
+            {first.thumbnailDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={first.thumbnailDataUrl} alt="Session 1" className="h-14 w-full rounded-lg object-cover opacity-70" />
+            ) : (
+              <div className="h-14 rounded-lg bg-muted/30 flex items-center justify-center">
+                <span className="font-mono text-[9px] text-muted-foreground/30">no preview</span>
+              </div>
+            )}
+          </div>
+          <span className="font-mono text-xs text-muted-foreground/40">→</span>
+          <div className="flex-1 space-y-1">
+            <p className="font-mono text-[9px] text-muted-foreground/50 uppercase tracking-widest">Recent</p>
+            {recentThree[recentThree.length - 1]?.thumbnailDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={recentThree[recentThree.length - 1].thumbnailDataUrl!} alt="Recent session" className="h-14 w-full rounded-lg object-cover" />
+            ) : (
+              <div className="h-14 rounded-lg bg-muted/30 flex items-center justify-center">
+                <span className="font-mono text-[9px] text-muted-foreground/30">no preview</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Score delta */}
+      <div className="grid grid-cols-2 gap-2">
+        <DeltaChip
+          label="Eye contact"
+          from={first.score.eyeContactPercent}
+          to={recentEye}
+          diff={eyeDiff}
+        />
+        <DeltaChip
+          label="Composure"
+          from={first.score.composurePercent}
+          to={recentComp}
+          diff={compDiff}
+        />
+      </div>
+    </div>
+  )
+}
+
+function DeltaChip({
+  label,
+  from,
+  to,
+  diff,
+}: {
+  label: string
+  from: number
+  to: number
+  diff: number
+}) {
+  const positive = diff > 0
+  const neutral = Math.abs(diff) < 5
+  return (
+    <div className="rounded-xl border border-border bg-card/50 px-3 py-2.5 space-y-1">
+      <p className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase">{label}</p>
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-mono text-[10px] text-muted-foreground/50">{from}%</span>
+        <span className="font-mono text-[10px] text-muted-foreground/30">→</span>
+        <span className="font-mono text-sm font-bold text-foreground">{to}%</span>
+      </div>
+      {!neutral && (
+        <p className={`font-mono text-[10px] font-bold ${positive ? "text-primary" : "text-destructive/60"}`}>
+          {positive ? "+" : ""}{diff} pts
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Session detail drawer — tap a completed card to open
+// ─────────────────────────────────────────────
+
+function SessionDetailDrawer({
+  card,
+  personaName,
+  onDismiss,
+}: {
+  card: SessionCardData | null
+  personaName: string
+  onDismiss: () => void
+}) {
+  return (
+    <Drawer open={!!card} onOpenChange={(o) => { if (!o) onDismiss() }}>
+      <DrawerContent className="mx-auto max-w-lg px-6 pb-10">
+        <DrawerHeader className="px-0 pt-2">
+          <div className="mx-auto h-1 w-8 rounded-full bg-border" />
+          <div className="mt-3 flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                Session {card?.sessionNumber}
+              </p>
+              <DrawerTitle className="font-mono text-base font-bold text-foreground">
+                {card?.date ? formatDate(card.date) : ""}
+              </DrawerTitle>
+            </div>
+            {card?.thumbnailDataUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={card.thumbnailDataUrl}
+                alt="Session thumbnail"
+                className="h-16 w-24 rounded-xl object-cover opacity-90"
+              />
+            )}
+          </div>
+        </DrawerHeader>
+
+        <div className="space-y-4">
+          {/* Persona feedback */}
+          {card?.feedbackMessage && (
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                {personaName}
+              </p>
+              <p className="font-mono text-sm leading-relaxed text-foreground">
+                {card.feedbackMessage}
+              </p>
+            </div>
+          )}
+
+          {/* Highlight + Focus */}
+          {(card?.feedbackHighlight || card?.feedbackFocusNext) && (
+            <div className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
+              {card.feedbackHighlight && (
+                <div className="flex gap-3">
+                  <span className="mt-0.5 text-primary">↑</span>
+                  <div>
+                    <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                      What went well
+                    </p>
+                    <p className="font-mono text-xs text-foreground">{card.feedbackHighlight}</p>
+                  </div>
+                </div>
+              )}
+              {card.feedbackFocusNext && (
+                <div className="flex gap-3">
+                  <span className="mt-0.5 text-muted-foreground">→</span>
+                  <div>
+                    <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                      Focus next time
+                    </p>
+                    <p className="font-mono text-xs text-foreground">{card.feedbackFocusNext}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Scores */}
+          {card?.state === "completed" && (
+            <div className="grid grid-cols-3 gap-2">
+              <ScoreChip label="Eye contact" value={qualitativePresence(card.eyeContactPercent ?? 0)} good={(card.eyeContactPercent ?? 0) >= 65} />
+              <ScoreChip label="Composure" value={qualitativePresence(card.composurePercent ?? 0)} good={(card.composurePercent ?? 0) >= 65} />
+              <ScoreChip label="Fillers" value={qualitativeFillers(card.fillerWordCount ?? 0)} good={(card.fillerWordCount ?? 0) <= 2} />
+            </div>
+          )}
+        </div>
+
+        <DrawerFooter className="px-0 pt-5">
+          <Button
+            variant="ghost"
+            onClick={onDismiss}
+            className="w-full font-mono text-xs text-muted-foreground"
+          >
+            Close
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  )
+}
+
+function ScoreChip({ label, value, good }: { label: string; value: string; good: boolean }) {
+  return (
+    <div className="space-y-0.5 rounded-xl border border-border bg-card px-3 py-2.5 text-center">
+      <p className={`font-mono text-sm font-bold ${good ? "text-primary" : "text-muted-foreground"}`}>
+        {value}
+      </p>
+      <p className="font-mono text-[9px] tracking-widest text-muted-foreground uppercase">{label}</p>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // Day nudge modal
 // ─────────────────────────────────────────────
 
@@ -572,11 +963,10 @@ function DayNudgeModal({
         <DrawerHeader className="px-0 pt-2">
           <div className="mx-auto h-1 w-8 rounded-full bg-border" />
           <DrawerTitle className="font-mono text-base font-bold text-foreground text-left mt-3">
-            That&apos;s your {limitForToday} for today.
+            Today&apos;s goal: done.
           </DrawerTitle>
           <p className="text-sm leading-relaxed text-muted-foreground text-left">
-            {personaName} will be here {nextUnlockDate}. But if you want to keep
-            going - you&apos;ve earned it.
+            {personaName} will be ready again {nextUnlockDate}. Tomorrow&apos;s session builds on what you just did — that&apos;s how this works. Or keep going now if you&apos;re in the zone.
           </p>
         </DrawerHeader>
         <DrawerFooter className="px-0 space-y-2">
@@ -748,6 +1138,10 @@ function buildSessionCards(
         fillerWordCount: s?.score.fillerWordCount ?? 0,
         pointsEarned: s?.feedback?.pointsEarned ?? 0,
         date: s?.date,
+        thumbnailDataUrl: s?.thumbnailDataUrl ?? null,
+        feedbackMessage: s?.feedback?.message ?? null,
+        feedbackHighlight: s?.feedback?.highlight ?? null,
+        feedbackFocusNext: s?.feedback?.focusNext ?? null,
       })
       continue
     }
@@ -871,20 +1265,60 @@ function getGreeting(): string {
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"
 }
 
+const PERSONA_LINES: Record<string, string[]> = {
+  Amara: [
+    "You showed up again. That matters more than the score.",
+    "Your camera is starting to feel familiar. That's exactly the point.",
+    "Every session is proof you're taking yourself seriously.",
+    "You're building something real here. Slowly, session by session.",
+    "Consistency looks like this. You're doing it.",
+  ],
+  James: [
+    "Pattern forming. The data doesn't lie.",
+    "Logged. Filed. Progress is measurable.",
+    "Consistency is the only variable that compounds long-term.",
+    "The work is working. Show up again.",
+    "Each session closes the gap. That's how this works.",
+  ],
+  Zoe: [
+    "ok wait — you came back. love that for you.",
+    "not to be dramatic but you're literally doing it.",
+    "the camera feared you first. now look.",
+    "you're kind of crushing this ngl.",
+    "another one? at this rate you'll forget you were ever nervous.",
+  ],
+  "Dr. Nkosi": [
+    "Growth, by definition, is uncomfortable. You're growing.",
+    "The discomfort you felt in session one? That's the gap closing.",
+    "Each session is a data point. You're building a meaningful dataset.",
+    "Progress is rarely linear. You're still progressing.",
+    "Consistency over intensity. You understand this.",
+  ],
+  Priya: [
+    "Still here. That's already half the battle.",
+    "No one who shows up this consistently stays stuck.",
+    "You know what separates the ones who improve? Exactly this.",
+    "Not bad. Come back and prove it wasn't a fluke.",
+    "Good session. Now forget about it and do another one.",
+  ],
+}
+
 function getMotivationalLine(
   progress: UserProgress,
   daily: DailyStatus,
-  name: string
+  personaName: string
 ): string {
   if (daily.isFreeCapReached)
-    return `You've made real progress, ${progress.totalSessions} sessions in. Unlock full access to keep going.`
+    return `${progress.totalSessions} sessions in. Unlock full access to keep the momentum going.`
   if (progress.totalSessions === 0)
-    return `${name} is ready when you are. Your first session is waiting below.`
+    return `${personaName} is ready when you are. Your first session is right there.`
   if (daily.isAtDailyLimit)
-    return `That's your ${daily.limitForToday} for today — but you can always keep going.`
+    return `That's your ${daily.limitForToday} for today — ${personaName} will be here tomorrow. Or keep going, your call.`
   if (progress.improvements.length > 0)
-    return `Your ${progress.improvements[0]}. ${name} sees it.`
-  return `${progress.totalSessions} session${progress.totalSessions > 1 ? "s" : ""} in. Keep the momentum going.`
+    return `Your ${progress.improvements[0]}. ${personaName} sees it.`
+
+  const lines = PERSONA_LINES[personaName] ?? PERSONA_LINES["Amara"]
+  return lines[(progress.totalSessions - 1) % lines.length]
 }
 
 function formatDate(iso: string): string {

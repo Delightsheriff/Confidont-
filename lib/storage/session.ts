@@ -68,39 +68,59 @@ export function getSessionById(id: string): StoredSession | null {
 
 // ── Write ─────────────────────────────────────
 
-// Save to localStorage first (never blocks), then push to Supabase if authenticated
-export async function saveSession(session: StoredSession): Promise<void> {
-  if (typeof window === "undefined") return
+export interface SaveSessionResult {
+  localSaved: boolean
+  // null = user not authenticated (cloud sync not attempted)
+  // true = synced successfully
+  // false = sync attempted but failed
+  syncedToCloud: boolean | null
+}
+
+// Save to localStorage first (never blocks), then push to Supabase if authenticated.
+// Returns sync status so callers can surface failures to the user.
+export async function saveSession(session: StoredSession): Promise<SaveSessionResult> {
+  if (typeof window === "undefined") return { localSaved: false, syncedToCloud: null }
 
   // Always write to localStorage first — auth never blocks saving
+  let localSaved = false
   try {
     const progress = getProgress()
     const updated = updateProgress(progress, session)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    localSaved = true
   } catch (err) {
     console.error("Failed to save session locally:", err)
   }
 
-  // Push to Supabase if authenticated (non-blocking)
+  // Push to Supabase if authenticated
   try {
     const supabase = createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from("sessions").upsert({
-        id: session.id,
-        user_id: user.id,
-        date: session.date,
-        phase: session.phase,
-        topics: session.topics,
-        score: session.score,
-        feedback: session.feedback,
-        thumbnail_data_url: session.thumbnailDataUrl,
-      })
+
+    if (!user) return { localSaved, syncedToCloud: null }
+
+    const { error } = await supabase.from("sessions").upsert({
+      id: session.id,
+      user_id: user.id,
+      date: session.date,
+      phase: session.phase,
+      topics: session.topics,
+      score: session.score,
+      feedback: session.feedback,
+      thumbnail_data_url: session.thumbnailDataUrl,
+    })
+
+    if (error) {
+      console.error("Supabase session push failed:", error.message)
+      return { localSaved, syncedToCloud: false }
     }
+
+    return { localSaved, syncedToCloud: true }
   } catch (err) {
-    console.error("Supabase session push failed (non-blocking):", err)
+    console.error("Supabase session push failed:", err)
+    return { localSaved, syncedToCloud: false }
   }
 }
 

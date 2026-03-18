@@ -70,38 +70,44 @@ export async function generateFeedback(
     fillerWordCount,
     durationSeconds,
     phase,
+    totalSessions,
   } = input
 
   const highlight =
     eyeContactPercent >= composurePercent
       ? eyeContactPercent >= 65
-        ? "Your eye contact was consistently strong — that reads as real presence on screen."
-        : "You were making an effort to stay with the camera — that awareness matters."
+        ? "Your eye contact felt natural and present — that kind of connection comes through clearly on camera."
+        : "You were working to stay with the camera, and that effort is exactly how this gets easier."
       : composurePercent >= 65
-        ? "You stayed composed and grounded throughout — that physical stillness reads as confidence."
-        : "You were working on staying still — that self-awareness is the first step."
+        ? "You stayed grounded and still the whole way through — that calm reads as real confidence."
+        : "Staying settled is something you were working on today, and noticing it is already half the work."
 
   const focusNext =
     eyeContactPercent < 45
-      ? "Next session, try treating the camera lens as a person — look just above it if direct feels too intense."
+      ? "Next session, try treating the camera lens like a person's eyes — soft focus, not a stare. Look just above it if direct feels like too much."
       : composurePercent < 45
-        ? "Notice where the restlessness lives — shoulders, hands, posture. Pick one thing to settle."
+        ? "See if you can find where the restlessness lives — shoulders, hands, posture. Just pick one thing to let settle."
         : fillerWordCount > 3
-          ? "Try replacing filler words with a short pause — silence reads as confidence, not hesitation."
-          : "You're building a solid foundation. Keep the consistency going."
+          ? "When you feel a filler word coming, try a breath instead. A short pause reads as confidence, not hesitation."
+          : "You're building something real here. Stay consistent and let the reps do the work."
 
   const opening =
-    phase === 1
-      ? `Great first step, ${userName}.`
-      : phase === 2
+    totalSessions === 0
+      ? `You showed up. That's the hardest part, ${userName}, and you did it.`
+      : phase === 1
         ? `Good session, ${userName}.`
-        : `Strong work today, ${userName}.`
+        : phase === 2
+          ? `You're finding your rhythm, ${userName}.`
+          : `Solid work today, ${userName}.`
 
-  const message = `${opening} ${highlight} ${
-    durationSeconds >= 60
-      ? "You stayed with it the whole way through."
-      : "Even short sessions build the habit."
-  }`
+  const closing =
+    totalSessions === 0
+      ? "First sessions are about getting comfortable being here — and you did that."
+      : durationSeconds >= 60
+        ? "You stayed with it the whole way through."
+        : "Even short sessions compound over time."
+
+  const message = `${opening} ${highlight} ${closing}`
 
   const points = Math.round(
     eyeContactPercent * 0.4 +

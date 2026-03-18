@@ -19,14 +19,14 @@ export function StepSessionsPerDay({ name, onNext }: StepSessionsPerDayProps) {
     <div className="flex flex-col gap-6 w-full">
       <div className="flex flex-col gap-2">
         <p className="font-mono text-xs tracking-widest text-primary uppercase truncate">
-          Almost there.
+          Almost done.
         </p>
         <h2 className="font-mono text-xl sm:text-2xl leading-tight font-bold text-foreground">
-          How often do you want to practice?
+          How often feels right for you?
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground text-wrap balance">
-          We&apos;ll use this to set your rhythm, {name}. You can always do more —
-          we won&apos;t stop you.
+          Even once a day compounds fast, {name}. You can always do more — we
+          won&apos;t get in the way.
         </p>
       </div>
       <div className="grid w-full grid-cols-1 sm:grid-cols-2 gap-2">

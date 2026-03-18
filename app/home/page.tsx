@@ -30,7 +30,7 @@ import type { UserProgress } from "@/lib/storage/session"
 //     after sign-out), push guest sessions, then load from Supabase.
 //   - No Supabase profile → new user finishing onboarding.
 //     Push local profile + sessions to Supabase, then load.
-//   - Neither → redirect to /
+//   - Neither → redirect to /onboarding
 //
 // Guest user — localStorage only:
 //   - Has local profile → render
@@ -62,7 +62,9 @@ export default function HomePage() {
           // New user — push their onboarding profile and guest sessions
           const localProfile = getProfile()
           if (!localProfile) {
-            router.replace("/")
+            // Authenticated but no profile anywhere → they skipped onboarding
+            // (e.g. signed in with Google before completing it)
+            router.replace("/onboarding")
             return
           }
           await pushProfileToSupabase()
@@ -74,7 +76,8 @@ export default function HomePage() {
 
         const resolvedProfile = supabaseProfile ?? (await getProfileFromSupabase())
         if (!resolvedProfile) {
-          router.replace("/")
+          // Profile push may have failed — send back to onboarding to retry
+          router.replace("/onboarding")
           return
         }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import {
   Drawer,
@@ -25,6 +25,31 @@ export default function BetaFeedback() {
   const [category, setCategory] = useState<Category>("general")
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [glowing, setGlowing] = useState(false)
+  const glowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const triggerGlow = () => {
+    if (glowTimerRef.current) clearTimeout(glowTimerRef.current)
+    setGlowing(true)
+    glowTimerRef.current = setTimeout(() => setGlowing(false), 3500)
+  }
+
+  // Glow on initial mount (page load)
+  useEffect(() => {
+    const t = setTimeout(triggerGlow, 800) // slight delay so page has settled
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Glow when session ends — SessionSummary dispatches this event
+  useEffect(() => {
+    const handler = () => triggerGlow()
+    window.addEventListener("beta-feedback-glow", handler)
+    return () => window.removeEventListener("beta-feedback-glow", handler)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => {
+    if (glowTimerRef.current) clearTimeout(glowTimerRef.current)
+  }, [])
 
   const handleSubmit = async () => {
     if (!message.trim()) return
@@ -58,11 +83,19 @@ export default function BetaFeedback() {
     <>
       {/* Floating trigger */}
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); setGlowing(false) }}
         aria-label="Send beta feedback"
-        className="fixed bottom-6 right-6 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-primary/30 bg-background/90 shadow-lg shadow-black/20 backdrop-blur-sm transition-all hover:border-primary/60 hover:bg-primary/10 active:scale-95"
+        className={`fixed bottom-6 right-6 z-50 flex h-11 w-11 items-center justify-center rounded-full border bg-background/90 shadow-lg shadow-black/20 backdrop-blur-sm transition-all active:scale-95 ${
+          glowing
+            ? "border-primary/70 bg-primary/15 shadow-primary/30 hover:border-primary hover:bg-primary/20"
+            : "border-primary/30 hover:border-primary/60 hover:bg-primary/10"
+        }`}
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-primary">
+        {/* Glow pulse ring */}
+        {glowing && (
+          <span className="absolute inset-0 animate-ping rounded-full bg-primary/25" />
+        )}
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={`relative transition-colors duration-300 ${glowing ? "text-primary" : "text-primary"}`}>
           <path
             d="M14 1H2a1 1 0 00-1 1v8a1 1 0 001 1h4l2 3 2-3h4a1 1 0 001-1V2a1 1 0 00-1-1z"
             stroke="currentColor"

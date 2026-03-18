@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { PERSONAS } from "@/types/user"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -12,6 +12,28 @@ interface StepPersonaProps {
   name: string
   saving: boolean
   onNext: (personaId: string) => void
+}
+
+// ── Typewriter hook ────────────────────────────────────────────────────
+function useTypewriter(text: string, speed = 28) {
+  const [displayed, setDisplayed] = useState("")
+  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setDisplayed("")
+    if (!text) return
+    let i = 0
+    const tick = () => {
+      i++
+      setDisplayed(text.slice(0, i))
+      if (i < text.length) rafRef.current = setTimeout(tick, speed)
+    }
+    // Small leading delay so the card mounts first
+    rafRef.current = setTimeout(tick, 120)
+    return () => { if (rafRef.current) clearTimeout(rafRef.current) }
+  }, [text, speed])
+
+  return displayed
 }
 
 export function StepPersona({ name, saving, onNext }: StepPersonaProps) {
@@ -26,6 +48,8 @@ export function StepPersona({ name, saving, onNext }: StepPersonaProps) {
   }
 
   const selectedPersona = PERSONAS.find((p) => p.id === selected) ?? null
+  const introText = selectedPersona?.sessionIntro ?? ""
+  const typedIntro = useTypewriter(introText)
 
   return (
     <div className="flex flex-col gap-5 w-full pb-16 sm:pb-6">
@@ -80,19 +104,19 @@ export function StepPersona({ name, saving, onNext }: StepPersonaProps) {
 
       {/* Detail card */}
       {selectedPersona ? (
-        <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 transition-all duration-300">
-          <div className="flex items-start gap-4">
+        <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4 transition-all duration-300">
+          <div className="flex items-start gap-3">
             {/* Avatar */}
             <div className="shrink-0 -mt-1">
               <PersonaDisplay
                 personaId={selectedPersona.id}
                 state={animState}
-                size={88}
+                size={72}
               />
             </div>
 
-            {/* Info */}
-            <div className="min-w-0 flex-1 space-y-2 pt-1">
+            {/* Name + speech bubble */}
+            <div className="min-w-0 flex-1 pt-1 space-y-2">
               <div>
                 <p className="font-mono text-sm font-bold text-foreground leading-none">
                   {selectedPersona.name}
@@ -101,12 +125,22 @@ export function StepPersona({ name, saving, onNext }: StepPersonaProps) {
                   {selectedPersona.ageRange} · {selectedPersona.personality}
                 </p>
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {selectedPersona.communicationStyle}
-              </p>
-              <p className="font-mono text-xs text-primary/80 italic leading-snug">
-                &quot;{selectedPersona.signatureLine}&quot;
-              </p>
+
+              {/* Speech bubble */}
+              <div className="relative rounded-xl rounded-tl-none bg-primary/10 border border-primary/15 px-3 py-2.5 min-h-[48px]">
+                {/* Small triangle pointing left toward avatar */}
+                <span
+                  className="absolute -left-[6px] top-2 w-0 h-0 border-t-[5px] border-t-transparent border-r-[6px] border-r-primary/15 border-b-[5px] border-b-transparent"
+                  aria-hidden
+                />
+                <p className="font-mono text-xs leading-relaxed text-foreground/80">
+                  {typedIntro}
+                  {/* Blinking cursor while typing */}
+                  {typedIntro.length < introText.length && (
+                    <span className="inline-block w-[2px] h-[11px] ml-[1px] bg-primary/60 align-middle animate-pulse" />
+                  )}
+                </p>
+              </div>
             </div>
           </div>
         </div>

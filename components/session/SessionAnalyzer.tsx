@@ -9,10 +9,10 @@ import { usePersonaVoice } from "@/hooks/usePersonaVoice"
 import { DEFAULT_CONFIG } from "@/lib/session-config"
 import { generateTopics } from "@/lib/ai/topics"
 import type { SessionTopic } from "@/lib/ai/topics"
-import type { SessionScore } from "@/types/session"
+import type { SessionScore, NudgeType } from "@/types/session"
 import type { Persona } from "@/types/user"
 import { PersonaAnimationState, PersonaDisplay } from "../persona/PersonaSVGs"
-import { useNudgeArbiter } from "@/hooks/Usenudgearbiter"
+import { useNudgeArbiter } from "@/hooks/useNudgeArbiter"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -58,6 +58,7 @@ export interface SessionResult {
   fillerWordCount: number
   topics: SessionTopic[]
   durationSeconds: number
+  thumbnailDataUrl: string | null
 }
 
 export default function SessionAnalyzer({
@@ -88,6 +89,11 @@ export default function SessionAnalyzer({
   const introSpokenRef = useRef(false)
   const voiceHintShownRef = useRef(false)
 
+  // Topic count — how many prompts this session (1–3)
+  // Default: 1 for first session, 2 for early phase, 3 after that
+  const defaultTopicCount = totalSessions === 0 ? 1 : phase <= 1 ? 2 : 3
+  const [topicCount, setTopicCount] = useState(defaultTopicCount)
+
   // Topic flow
   const [topics, setTopics] = useState<SessionTopic[]>([])
   const [topicIndex, setTopicIndex] = useState(0)
@@ -116,6 +122,15 @@ export default function SessionAnalyzer({
   // Nudge arbiter — single coordinator ───────────────────────────────
   const { activeNudge, fire: fireNudge } = useNudgeArbiter()
 
+  // Phase-gated nudges — Phase 1: affirmations only; Phase 2: gentle nudges;
+  // Phase 3+: all nudges. Wraps the arbiter's fire() to filter by phase.
+  const phaseAwareFireNudge = useCallback(
+    (type: NudgeType) => {
+      if (isNudgeAllowedInPhase(type, phase)) fireNudge(type)
+    },
+    [fireNudge, phase]
+  )
+
   // ── Persona animation state — derived from activeNudge, no state needed
   const personaState: PersonaAnimationState = activeNudge
     ? (NUDGE_TO_ANIMATION[activeNudge.type] ?? "idle")
@@ -126,7 +141,7 @@ export default function SessionAnalyzer({
     videoRef,
     isActive,
     DEFAULT_CONFIG,
-    fireNudge // arbiter.fire replaces internal nudge dispatch
+    phaseAwareFireNudge
   )
 
   // ── Audio analysis — routes nudge signals to arbiter ──────────────
@@ -135,9 +150,9 @@ export default function SessionAnalyzer({
       isActive,
       audioConfig,
       undefined, // onFillerDetected — not needed at this level
-      () => fireNudge("filler-word-spike"), // onFillerSpike
-      () => fireNudge("long-silence"), // onSilenceStart (session open 4s)
-      () => fireNudge("long-silence") // onLongSilence (mid session 7s)
+      () => phaseAwareFireNudge("filler-word-spike"),
+      () => phaseAwareFireNudge("long-silence"), // session open 4s
+      () => phaseAwareFireNudge("long-silence")  // mid session 7s
     )
 
   // ── Waveform ──────────────────────────────────────────────────────
@@ -226,6 +241,21 @@ export default function SessionAnalyzer({
     stopWaveform()
   }, [stopWaveform])
 
+  // Grab a single JPEG frame from the video at 320×180. Mirrored to match display.
+  const captureFrame = useCallback((): string | null => {
+    const video = videoRef.current
+    if (!video || video.readyState < 2) return null
+    const canvas = document.createElement("canvas")
+    canvas.width = 320
+    canvas.height = 180
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return null
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL("image/jpeg", 0.6)
+  }, [])
+
   // ── Topic timer ────────────────────────────────────────────────────
   const startTopicTimer = useCallback(() => {
     setTopicSeconds(0)
@@ -267,7 +297,7 @@ export default function SessionAnalyzer({
       return
     }
 
-    setTopics(loadedTopics)
+    setTopics(loadedTopics.slice(0, topicCount))
     setTopicIndex(0)
 
     if (videoRef.current) {
@@ -289,6 +319,7 @@ export default function SessionAnalyzer({
     weakAreas,
     completedTopics,
     totalSessions,
+    topicCount,
   ])
 
   // ── Next topic ─────────────────────────────────────────────────────
@@ -296,6 +327,7 @@ export default function SessionAnalyzer({
     stopTopicTimer()
     const nextIndex = topicIndex + 1
     if (nextIndex >= topics.length) {
+      const thumbnailDataUrl = captureFrame()
       setSessionState("done")
       stopCamera()
       onSessionComplete({
@@ -303,6 +335,7 @@ export default function SessionAnalyzer({
         fillerWordCount,
         topics,
         durationSeconds: sessionScore.durationSeconds,
+        thumbnailDataUrl,
       })
     } else {
       setTopicIndex(nextIndex)
@@ -313,6 +346,7 @@ export default function SessionAnalyzer({
     topics,
     stopTopicTimer,
     startTopicTimer,
+    captureFrame,
     stopCamera,
     onSessionComplete,
     sessionScore,
@@ -487,12 +521,45 @@ export default function SessionAnalyzer({
           <div className="flex max-w-xs flex-col items-center gap-6 text-center">
             <p className="font-mono text-sm leading-relaxed text-foreground">
               {isReady
-                ? `${persona.name} is ready when you are.`
+                ? totalSessions === 0
+                  ? `This is your first session — no pressure at all. Just talk naturally.`
+                  : `${persona.name} is ready when you are.`
                 : "Setting things up..."}
             </p>
             <p className="font-mono text-xs text-muted-foreground italic">
               &ldquo;{persona.signatureLine}&rdquo;
             </p>
+
+            {/* Topic count picker */}
+            {isReady && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="font-mono text-[10px] tracking-widest text-muted-foreground/50 uppercase">
+                  How many prompts?
+                </p>
+                <div className="flex items-center rounded-full border border-border p-0.5 gap-0.5">
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setTopicCount(n)}
+                      className={`w-9 h-8 rounded-full font-mono text-xs transition-all duration-150 ${
+                        topicCount === n
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <p className="font-mono text-[10px] text-muted-foreground/40">
+                  {topicCount === 1
+                    ? "~1 min · easy warm-up"
+                    : topicCount === 2
+                      ? "~2 min · steady"
+                      : "~3 min · full session"}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -509,8 +576,8 @@ export default function SessionAnalyzer({
         {/* ── Active — topic prompt ───────────────────────────────────── */}
         {sessionState === "active" && currentTopic && (
           <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
-            <p className="font-mono text-[10px] tracking-widest text-muted-foreground/60 uppercase">
-              Talk about
+            <p className="font-mono text-[10px] tracking-widest text-muted-foreground/40 uppercase">
+              {currentTopic.topic}
             </p>
             <p className="font-mono text-base leading-relaxed text-foreground">
               {currentTopic.prompt}
@@ -625,7 +692,11 @@ export default function SessionAnalyzer({
               className="rounded-full px-10"
               size="lg"
             >
-              {isReady ? "Start Session" : "Loading..."}
+              {isReady
+                ? totalSessions === 0
+                  ? "I'm ready →"
+                  : "Start Session"
+                : "Loading..."}
             </Button>
           )}
 
@@ -681,6 +752,16 @@ export default function SessionAnalyzer({
       </footer>
     </div>
   )
+}
+
+// Phase-gating rules:
+//   Phase 1 (sessions 1-3)  → affirmations only (positive-streak)
+//   Phase 2 (sessions 4-9)  → gentle nudges (no fast/slow speech, no fidgeting/tilt)
+//   Phase 3+ (sessions 10+) → all nudges
+function isNudgeAllowedInPhase(type: NudgeType, phase: number): boolean {
+  if (phase >= 3) return true
+  if (phase === 2) return type !== "speech-too-fast" && type !== "speech-too-slow" && type !== "fidgeting" && type !== "head-tilted"
+  return type === "positive-streak"
 }
 
 // ── Live metric pill ───────────────────────────────────────────────────

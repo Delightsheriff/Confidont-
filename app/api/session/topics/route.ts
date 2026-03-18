@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import Groq from "groq-sdk"
+import { createClient } from "@/lib/supabase/server"
 import type { GenerateTopicsInput, SessionTopic } from "@/lib/ai/topics"
 
 // ─────────────────────────────────────────────
@@ -19,14 +20,17 @@ Each topic should feel natural and low-stakes — the goal is to get the user ta
 
 Rules:
 - Topics progress in difficulty within the session (easiest first)
-- Phase 1: deeply personal and comfortable (food, hobbies, favourite places)
-- Phase 2: slightly more reflective (skills, people they admire, recent wins)
-- Phase 3: professional and narrative (challenges, decisions, achievements)
-- Phase 4: high-stakes simulation (pitches, interview questions, persuasion)
+- Phase 1: deeply personal and comfortable (food, hobbies, favourite places, a recent moment they enjoyed)
+- Phase 2: slightly more reflective (skills, people they admire, recent wins, things they've learned)
+- Phase 3: professional and narrative (challenges navigated, decisions made, things they're proud of)
+- Phase 4: high-stakes simulation (articulating strengths, handling tough questions, making a case for something)
+- For sessions 1–3 (totalSessions < 3): keep every prompt ultra-low-stakes and reassuring — think of it as a gentle warm-up conversation, not an assessment
 - Never repeat topics from completedTopics
-- If weakAreas includes "eye contact" or "composure", bias toward topics that are conversational and lower anxiety
-- If weakAreas includes "filler words", bias toward topics that require deliberate structured answers
-- Prompts should sound like a warm coach asking, not a test paper
+- If weakAreas includes "eye contact" or "composure", favour topics that feel conversational and lower-anxiety
+- If weakAreas includes "filler words", favour topics that reward deliberate, structured answers
+- Prompts must sound like a warm friend or coach speaking — never interrogative, never clinical
+- Start prompts with "Tell me about...", "I'd love to hear...", "What's...", not commands or directives
+- durationSeconds: 60 for Phase 1, 75 for Phase 2, 90 for Phase 3+
 
 Respond ONLY with valid JSON. No explanation, no markdown, no backticks.
 Format:
@@ -42,13 +46,20 @@ Format:
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const input: GenerateTopicsInput = await req.json()
 
+    const isEarlySession = input.totalSessions < 3
     const userContext = `
 User: ${input.name}
 Goal: ${input.goal}
 Phase: ${input.phase} of 4
-Sessions completed: ${input.totalSessions}
+Sessions completed: ${input.totalSessions}${isEarlySession ? " — this is an early session, keep everything warm and low-pressure" : ""}
 Weak areas: ${input.weakAreas.length > 0 ? input.weakAreas.join(", ") : "none identified yet"}
 Topics already completed: ${input.completedTopics.length > 0 ? input.completedTopics.join(", ") : "none"}
 

@@ -15,34 +15,41 @@
 
 import { NextResponse } from "next/server"
 import { Resend } from "resend"
+import { createClient } from "@supabase/supabase-js"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = "Confidont <onboarding@resend.dev>"
 
-// ── In-memory rate limiter ────────────────────
-// { ip → { count, resetAt } }
-// Resets per IP after WINDOW_MS
-// Good enough for beta on a single instance.
-// Swap for Upstash Redis when you scale.
+// Anon client — only reads from the waitlist table (public read is fine for a count check)
+const supabaseAnon = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+)
 
-const LIMIT = 3
-const WINDOW_MS = 60 * 60 * 1000 // 1 hour
+// ── DB-backed freshness guard ─────────────────
+// Replaces the old in-memory IP rate limiter (which resets on every
+// Vercel function cold start).
+//
+// Strategy: only allow notification if the email was inserted to the
+// waitlist within the last 5 minutes. This means:
+//   - Each email can only trigger one notification (the Supabase unique
+//     constraint prevents duplicate inserts, so the email can only ever
+//     be "fresh" once).
+//   - Direct POST attacks with arbitrary emails are rejected because
+//     the email won't exist (or won't be fresh) in the table.
 
-const ipMap = new Map<string, { count: number; resetAt: number }>()
+const FRESH_WINDOW_MS = 5 * 60 * 1000 // 5 minutes
 
-function isRateLimited(ip: string): boolean {
-  const now = Date.now()
-  const record = ipMap.get(ip)
-
-  if (!record || now > record.resetAt) {
-    ipMap.set(ip, { count: 1, resetAt: now + WINDOW_MS })
-    return false
-  }
-
-  if (record.count >= LIMIT) return true
-
-  record.count++
-  return false
+async function isEmailFreshInWaitlist(email: string): Promise<boolean> {
+  const since = new Date(Date.now() - FRESH_WINDOW_MS).toISOString()
+  const { data } = await supabaseAnon
+    .from("waitlist")
+    .select("created_at")
+    .eq("email", email)
+    .gte("created_at", since)
+    .limit(1)
+    .single()
+  return !!data
 }
 
 // ── Disposable email blocklist ────────────────
@@ -83,17 +90,6 @@ function isDisposable(email: string): boolean {
 
 export async function POST(request: Request) {
   try {
-    // Get IP — works on Vercel, falls back for local dev
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-      request.headers.get("x-real-ip") ??
-      "unknown"
-
-    // Rate limit check
-    if (isRateLimited(ip)) {
-      return NextResponse.json({ error: "Too many requests" }, { status: 429 })
-    }
-
     const body = await request.json().catch(() => null)
     const email =
       typeof body?.email === "string" ? body.email.toLowerCase().trim() : null
@@ -105,18 +101,21 @@ export async function POST(request: Request) {
 
     // Disposable email check
     if (isDisposable(email)) {
-      console.log("[notify] Blocked disposable email:", email)
       return NextResponse.json(
         { error: "Please use a real email address" },
         { status: 400 }
       )
     }
 
-    console.log("[notify] Email passed validation, sending emails to:", email)
+    // DB-backed freshness guard — email must have been inserted within the
+    // last 5 minutes. Prevents direct-POST abuse and replay attacks without
+    // needing Redis. Works correctly across all Vercel function instances.
+    const isFresh = await isEmailFreshInWaitlist(email)
+    if (!isFresh) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+    }
 
     // Send emails in parallel — neither failing breaks the other
-    console.log("[notify] Sending emails for:", email)
-
     const notifyEmail = process.env.WAITLIST_NOTIFY_EMAIL
     const sends = [confirmationEmail(email)]
     if (notifyEmail) sends.push(notificationEmail(email, notifyEmail))

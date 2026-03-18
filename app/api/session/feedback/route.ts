@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import Groq from "groq-sdk"
+import { createClient } from "@/lib/supabase/server"
 import type { GenerateFeedbackInput, SessionFeedback } from "@/lib/ai/feedback"
 
 // ─────────────────────────────────────────────
@@ -29,20 +30,27 @@ Format:
 {
   "message": "2-3 sentence warm debrief in your persona voice",
   "highlight": "one specific thing that went well, referencing the actual data",
-  "focusNext": "one specific, actionable thing to work on next session",
+  "focusNext": "one specific, actionable thing to try next session — framed as an invitation, not a correction",
   "pointsEarned": <integer 0-100>
 }
 
 Rules:
-- message is conversational, warm, in your persona voice — never clinical
-- highlight must reference actual metric numbers (e.g. "67% eye contact")
-- focusNext is specific and achievable — one thing only
+- message is conversational, warm, in your persona voice — never clinical or evaluative
+- highlight must reference actual metric numbers (e.g. "67% eye contact") but frame them as evidence of progress, not a grade
+- focusNext is one thing only — specific, kind, and achievable. Say "try..." or "next time..." not "you need to..."
 - pointsEarned: use formula (eyeContact * 0.4) + (composure * 0.3) + max(0, 10 - fillers) * 3 + min(duration/60, 2) * 10, rounded to int
-- Never mention scores in a negative or judgmental framing
-- If first session (totalSessions === 0), acknowledge the courage it takes to start`
+- Never frame scores negatively or judgmentally
+- If first session (totalSessions === 0): lead with "you showed up" — that IS the achievement. Keep the whole debrief warm and welcoming. This is about making them want to come back, not about performance.
+- For sessions 1–5 overall: prioritise warmth and belonging over precision. They're still building the habit.`
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const input: GenerateFeedbackInput = await req.json()
 
     // Resolve persona voice — fallback to amara if unknown

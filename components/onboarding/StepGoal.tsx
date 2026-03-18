@@ -41,13 +41,13 @@ export function StepGoal({ name, onNext }: StepGoalProps) {
     <div className="flex flex-col gap-6 w-full">
       <div className="flex flex-col gap-2">
         <p className="font-mono text-xs tracking-widest text-primary uppercase truncate">
-          Good to know, {name}.
+          Nice, {name}.
         </p>
         <h2 className="font-mono text-xl sm:text-2xl leading-tight font-bold text-foreground">
-          Why are you here?
+          What are you working toward?
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Pick the one that fits best. You can always change this later.
+          Pick what resonates most. No wrong answer — you can update this later.
         </p>
       </div>
       <div className="flex w-full flex-col gap-2">

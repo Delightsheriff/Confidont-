@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth"
 import AuthModal from "@/components/auth/AuthModal"
 import { generateFeedback } from "@/lib/ai/feedback"
 import { saveSession } from "@/lib/storage/session"
+import type { SaveSessionResult } from "@/lib/storage/session"
 import {
   getGuestSessionCount,
   incrementGuestSessionCount,
@@ -42,6 +43,7 @@ export default function SessionSummary({
 
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("loading")
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [syncResult, setSyncResult] = useState<SaveSessionResult | null>(null)
   // Lazy initializer — reads localStorage once at mount, no effect needed
   const [guestCount, setGuestCount] = useState(() => getGuestSessionCount())
   const [feedback, setFeedback] = useState<{
@@ -50,6 +52,14 @@ export default function SessionSummary({
     focusNext: string
     pointsEarned: number
   } | null>(null)
+
+  // Notify BetaFeedback to glow — session end is a great moment for feedback
+  useEffect(() => {
+    const t = setTimeout(() => {
+      window.dispatchEvent(new Event("beta-feedback-glow"))
+    }, 2000) // delay so user reads feedback first
+    return () => clearTimeout(t)
+  }, [])
 
   // Load feedback on mount
   useEffect(() => {
@@ -80,16 +90,17 @@ export default function SessionSummary({
   const handleSave = async () => {
     if (!feedback) return
 
-    await saveSession({
+    const result_ = await saveSession({
       id: `session_${Date.now()}`,
       date: new Date().toISOString(),
       phase,
       topics: result.topics,
       score: { ...result.score, fillerWordCount: result.fillerWordCount },
       feedback,
-      thumbnailDataUrl: null,
+      thumbnailDataUrl: result.thumbnailDataUrl,
     })
 
+    setSyncResult(result_)
     setFeedbackState("saved")
 
     // Guest — increment and prompt auth
@@ -246,43 +257,71 @@ export default function SessionSummary({
       {feedbackState !== "loading" && (
         <div className="flex w-full max-w-xs flex-col items-center gap-3">
           {feedbackState === "ready" && (
-            <Button
-              variant="outline"
-              onClick={handleSave}
-              className="w-full rounded-full"
-            >
-              Save Progress
-            </Button>
+            <>
+              <Button
+                onClick={onRestart}
+                className="w-full rounded-full"
+              >
+                Go again
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSave}
+                className="w-full rounded-full"
+              >
+                Save progress
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onBack}
+                className="font-mono text-xs text-muted-foreground"
+              >
+                ← back to home
+              </Button>
+            </>
           )}
 
           {feedbackState === "saved" && (
-            <div className="flex w-full items-center justify-center gap-2 rounded-full border border-border px-8 py-3 font-mono text-sm text-muted-foreground">
-              <span className="text-primary">✓</span> Saved
+            <>
+              {/* Confirmation + sync status */}
+              <div className="flex flex-col items-center gap-1">
+                <p className="font-mono text-sm text-primary">
+                  ✓ Session saved
+                </p>
+                {syncResult?.syncedToCloud === false && (
+                  <p className="font-mono text-[11px] text-amber-500/80">
+                    Cloud sync failed — data is safe on this device
+                  </p>
+                )}
+                {syncResult?.syncedToCloud === true && (
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    Synced to your account
+                  </p>
+                )}
+              </div>
               {!user && (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="ml-2 font-bold text-primary transition-opacity hover:opacity-70"
+                  className="font-mono text-xs text-muted-foreground transition-opacity hover:opacity-70"
                 >
-                  — sync it →
+                  Sync to your account →
                 </button>
               )}
-            </div>
+              <Button
+                onClick={onRestart}
+                className="mt-1 w-full rounded-full"
+              >
+                Go again
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onBack}
+                className="font-mono text-xs text-muted-foreground"
+              >
+                ← back to home
+              </Button>
+            </>
           )}
-
-          <Button
-            onClick={onRestart}
-            className="w-full rounded-full"
-          >
-            Start Again
-          </Button>
-
-          <Button
-            variant="ghost"
-            onClick={onBack}
-            className="font-mono text-xs text-muted-foreground"
-          >
-            ← back to home
-          </Button>
         </div>
       )}
 
