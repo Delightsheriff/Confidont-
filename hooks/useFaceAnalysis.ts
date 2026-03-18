@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
@@ -6,29 +7,25 @@ import type {
   FaceAnalysisConfig,
   FrameMetrics,
   SessionScore,
-  Nudge,
   NudgeType,
 } from "@/types/session"
-import { NUDGE_MESSAGES } from "@/lib/session-config"
 
 // ─────────────────────────────────────────────
 // useFaceAnalysis
 //
-// Core detection hook. Knows nothing about UI.
-// Config-driven — enable/disable metrics without
-// touching detection logic.
+// Core detection hook. Knows nothing about UI or nudge policy.
+// All nudge signals are emitted via onNudge — the arbiter
+// (useNudgeArbiter) owns cooldowns, caps, and mutual exclusion.
 //
 // CRITICAL: The video element must stay in the DOM
 // and be rendered (not display:none) for MediaPipe
 // to receive valid frames.
 // Use: opacity-0 absolute pointer-events-none
-// instead of className="hidden"
 // ─────────────────────────────────────────────
 
 export interface UseFaceAnalysisReturn {
   frameMetrics: FrameMetrics | null
   sessionScore: SessionScore
-  activeNudge: Nudge | null
   isReady: boolean
 }
 
@@ -43,53 +40,91 @@ const INITIAL_SCORE: SessionScore = {
 
 type Landmark = { x: number; y: number; z: number }
 
+const EYE_CONTACT_LOSS_THRESHOLD_MS = 8_000
+const FIDGET_WINDOW_SIZE = 30
+const FIDGET_THRESHOLD = 20
+const SCORE_UPDATE_INTERVAL_MS = 2_000
+const BUCKET_MS = 10_000 // group frames into 10-second windows for consistency scoring
+
+// Median is resistant to a last-second burst of good behaviour inflating the score.
+// A user who is poor for 80% of the session and excellent for 20% gets a low median.
+function medianOf(arr: number[]): number {
+  const sorted = [...arr].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
+}
+
 export function useFaceAnalysis(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   isSessionActive: boolean,
-  config: FaceAnalysisConfig
+  config: FaceAnalysisConfig,
+  onNudge?: (type: NudgeType) => void // routed to useNudgeArbiter at call site
 ): UseFaceAnalysisReturn {
   const [isReady, setIsReady] = useState(false)
   const [frameMetrics, setFrameMetrics] = useState<FrameMetrics | null>(null)
   const [sessionScore, setSessionScore] = useState<SessionScore>(INITIAL_SCORE)
-  const [activeNudge, setActiveNudge] = useState<Nudge | null>(null)
 
   const landmarkerRef = useRef<FaceLandmarker | null>(null)
   const requestRef = useRef<number | undefined>(undefined)
   const prevNoseRef = useRef<{ x: number; y: number } | null>(null)
+
   const eyeContactFramesRef = useRef(0)
   const composureFramesRef = useRef(0)
   const totalFramesRef = useRef(0)
+  const fidgetWindowRef = useRef<boolean[]>([])
+  const lastScoreUpdateRef = useRef<number>(0)
   const sessionStartRef = useRef<number | null>(null)
-  const lastNudgeTimeRef = useRef<number>(0)
-  const positiveStreakStartRef = useRef<number | null>(null)
+
+  // Bucket tracking — accumulate 10-second windows for median scoring
+  const bucketDataRef = useRef<Array<{ ec: number; comp: number }>>([])
+  const bucketStartRef = useRef<number>(0)
+  const bucketEcFramesRef = useRef(0)
+  const bucketCompFramesRef = useRef(0)
+  const bucketFramesRef = useRef(0)
+
+  // Velocity tracking for frame-rate-independent composure measurement
+  const lastFrameTimeRef = useRef<number | null>(null)
+
+  // Config and callback refs — no stale closures in rAF
+  const configRef = useRef(config)
+  const onNudgeRef = useRef(onNudge)
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
+  useEffect(() => {
+    onNudgeRef.current = onNudge
+  }, [onNudge])
+
+  // Sustained tracking
+  const eyeLossStartRef = useRef<number | null>(null)
+  const positiveStreakStart = useRef<number | null>(null)
 
   // ── Load MediaPipe ──────────────────────────
   useEffect(() => {
     let cancelled = false
-    const setup = async () => {
+    async function setup() {
       try {
-        const filesetResolver = await FilesetResolver.forVisionTasks(
+        const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         )
-        const faceLandmarker = await FaceLandmarker.createFromOptions(
-          filesetResolver,
-          {
-            baseOptions: {
-              modelAssetPath:
-                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-              delegate: "GPU",
-            },
-            outputFaceBlendshapes: true,
-            runningMode: "VIDEO",
-            numFaces: 1,
-          }
-        )
+        const lm = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+            delegate: "GPU",
+          },
+          outputFaceBlendshapes: true,
+          runningMode: "VIDEO",
+          numFaces: 1,
+        })
         if (!cancelled) {
-          landmarkerRef.current = faceLandmarker
+          landmarkerRef.current = lm
           setIsReady(true)
         }
       } catch (err) {
-        console.error("MediaPipe setup failed:", err)
+        console.error("[Confidont] MediaPipe setup failed:", err)
       }
     }
     setup()
@@ -98,25 +133,16 @@ export function useFaceAnalysis(
     }
   }, [])
 
-  // ── Nudge dispatcher ────────────────────────
-  const fireNudge = useCallback(
-    (type: NudgeType) => {
-      const now = performance.now()
-      if (now - lastNudgeTimeRef.current < config.thresholds.nudge.cooldownMs)
-        return
-      const messages = NUDGE_MESSAGES[type]
-      const message = messages[Math.floor(Math.random() * messages.length)]
-      lastNudgeTimeRef.current = now
-      setActiveNudge({ type, message, timestamp: now })
-      setTimeout(() => setActiveNudge(null), 5000)
-    },
-    [config.thresholds.nudge.cooldownMs]
-  )
+  // ── Signal emitter — delegates to arbiter ───────────────────────
+  // Stable — reads callback via ref. Safe inside rAF.
+  const emit = useCallback((type: NudgeType) => {
+    onNudgeRef.current?.(type)
+  }, [])
 
-  // ── Per-frame processor ──────────────────────
+  // ── Per-frame processor ──────────────────────────────────────────
   const processFrame = useCallback(
     (landmarks: Landmark[]) => {
-      const { metrics, thresholds } = config
+      const { metrics, thresholds } = configRef.current
       const now = performance.now()
       totalFramesRef.current++
 
@@ -134,188 +160,246 @@ export function useFaceAnalysis(
         cameraAngle: null,
       }
 
-      // ── Eye Contact ──────────────────────────
+      // ── Eye Contact ──────────────────────────────────────────────
       if (metrics.eyeContact) {
-        const getHGaze = (iris: Landmark, inner: Landmark, outer: Landmark) =>
+        const hGaze = (iris: Landmark, inner: Landmark, outer: Landmark) =>
           (iris.x - inner.x) / (outer.x - inner.x)
 
-        const leftGaze = getHGaze(landmarks[468], landmarks[33], landmarks[133])
-        const rightGaze = getHGaze(
-          landmarks[473],
-          landmarks[362],
-          landmarks[263]
-        )
-        const leftVertical =
+        const leftH = hGaze(landmarks[468], landmarks[33], landmarks[133])
+        const rightH = hGaze(landmarks[473], landmarks[362], landmarks[263])
+        const leftV =
           (landmarks[468].y - landmarks[159].y) /
           (landmarks[145].y - landmarks[159].y)
 
-        const { horizontalMin, horizontalMax, verticalMin, verticalMax } =
-          thresholds.eyeContact
-
+        const t = thresholds.eyeContact
         result.eyeContact =
-          leftGaze > horizontalMin &&
-          leftGaze < horizontalMax &&
-          rightGaze > horizontalMin &&
-          rightGaze < horizontalMax &&
-          leftVertical > verticalMin &&
-          leftVertical < verticalMax
+          leftH > t.horizontalMin &&
+          leftH < t.horizontalMax &&
+          rightH > t.horizontalMin &&
+          rightH < t.horizontalMax &&
+          leftV > t.verticalMin &&
+          leftV < t.verticalMax
 
         if (result.eyeContact) {
           eyeContactFramesRef.current++
-          if (!positiveStreakStartRef.current)
-            positiveStreakStartRef.current = now
-          const streakSeconds = (now - positiveStreakStartRef.current) / 1000
-          if (streakSeconds >= thresholds.nudge.positiveStreakSeconds) {
-            fireNudge("positive-streak")
-            positiveStreakStartRef.current = now
+          eyeLossStartRef.current = null
+
+          if (!positiveStreakStart.current) positiveStreakStart.current = now
+          if (
+            now - positiveStreakStart.current >=
+            thresholds.nudge.positiveStreakSeconds * 1000
+          ) {
+            emit("positive-streak")
+            positiveStreakStart.current = now
           }
         } else {
-          positiveStreakStartRef.current = null
-          fireNudge("eye-contact-lost")
+          positiveStreakStart.current = null
+          if (!eyeLossStartRef.current) eyeLossStartRef.current = now
+          if (now - eyeLossStartRef.current >= EYE_CONTACT_LOSS_THRESHOLD_MS) {
+            emit("eye-contact-lost")
+            eyeLossStartRef.current = now
+          }
         }
       }
 
-      // ── Composure / Stability ────────────────
+      // ── Composure (velocity-based — frame-rate independent) ─────────
+      // Measures units/second so 30fps and 60fps produce identical results.
+      // threshold.composure.maxMovement is now in normalized units/sec.
       if (metrics.composure) {
         const nose = landmarks[4]
-        let movement = 0
-        if (prevNoseRef.current) {
-          movement = Math.sqrt(
-            Math.pow(nose.x - prevNoseRef.current.x, 2) +
-              Math.pow(nose.y - prevNoseRef.current.y, 2)
-          )
+        let velocity = 0
+        if (prevNoseRef.current && lastFrameTimeRef.current !== null) {
+          const dx = nose.x - prevNoseRef.current.x
+          const dy = nose.y - prevNoseRef.current.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          const dt = (now - lastFrameTimeRef.current) / 1000 // seconds
+          velocity = dt > 0.002 ? dist / dt : 0 // guard near-zero intervals
         }
         prevNoseRef.current = { x: nose.x, y: nose.y }
-        result.composure = movement < thresholds.composure.maxMovement
-        if (result.composure) {
-          composureFramesRef.current++
-        } else {
-          fireNudge("fidgeting")
+        lastFrameTimeRef.current = now
+
+        const isMoving = velocity >= thresholds.composure.maxMovement
+        result.composure = !isMoving
+        if (!isMoving) composureFramesRef.current++
+
+        fidgetWindowRef.current.push(isMoving)
+        if (fidgetWindowRef.current.length > FIDGET_WINDOW_SIZE)
+          fidgetWindowRef.current.shift()
+        if (
+          fidgetWindowRef.current.length === FIDGET_WINDOW_SIZE &&
+          fidgetWindowRef.current.filter(Boolean).length >= FIDGET_THRESHOLD
+        ) {
+          emit("fidgeting")
+          fidgetWindowRef.current = []
         }
       }
 
-      // ── Head Pose ────────────────────────────
-      // Simplified heuristic — nose tip relative to face center
-      // Full euler angles require 3D projection (future improvement)
+      // ── Head Pose ────────────────────────────────────────────────
       if (metrics.headPose) {
-        const noseTip = landmarks[4]
-        const faceCenter = landmarks[168]
-        const yaw = (noseTip.x - faceCenter.x) * 100
-        const pitch = (noseTip.y - faceCenter.y) * 100
+        const nose = landmarks[4]
+        const center = landmarks[168]
+        const yaw = (nose.x - center.x) * 100
+        const pitch = (nose.y - center.y) * 100
         const roll = (landmarks[454].y - landmarks[234].y) * 100
         result.headPose = { pitch, yaw, roll }
         if (
           Math.abs(yaw) > thresholds.headPose.maxYaw ||
           Math.abs(pitch) > thresholds.headPose.maxPitch
         ) {
-          fireNudge("head-tilted")
+          emit("head-tilted")
         }
       }
 
-      // ── Blink Rate ───────────────────────────
-      // Scaffolded — uses eye aspect ratio (EAR)
-      // Needs rolling 60s window accumulator before enabling
-      // if (metrics.blinkRate) {
-      //   const topLid    = landmarks[159]
-      //   const bottomLid = landmarks[145]
-      //   const EAR = Math.abs(topLid.y - bottomLid.y)
-      //   // EAR < 0.02 = blink detected, accumulate in rolling window
-      // }
-
-      // ── Mouth Movement ───────────────────────
-      // Openness ratio 0-1 — foundation for pace detection
+      // ── Mouth Movement ───────────────────────────────────────────
       if (metrics.mouthMovement) {
-        const upperLip = landmarks[13]
-        const lowerLip = landmarks[14]
         result.mouthMovement = Math.min(
-          Math.abs(lowerLip.y - upperLip.y) * 10,
+          Math.abs(landmarks[14].y - landmarks[13].y) * 10,
           1
         )
       }
 
-      // ── Camera Angle ─────────────────────────
+      // ── Camera Angle ─────────────────────────────────────────────
       if (metrics.cameraAngle) {
-        const noseY = landmarks[4].y
+        const y = landmarks[4].y
         result.cameraAngle =
-          noseY < 0.25 ? "too-high" : noseY > 0.75 ? "too-low" : "eye-level"
+          y < 0.25 ? "too-high" : y > 0.75 ? "too-low" : "eye-level"
       }
 
-      // ── Lighting Quality ─────────────────────
-      // Z-range of key landmarks as rough depth/lighting proxy
+      // ── Lighting Quality ─────────────────────────────────────────
       if (metrics.lightingQuality) {
-        const zValues = [
+        const zs = [
           landmarks[1],
           landmarks[33],
           landmarks[263],
           landmarks[4],
         ].map((p) => p.z)
-        const zRange = Math.max(...zValues) - Math.min(...zValues)
+        const zRange = Math.max(...zs) - Math.min(...zs)
         result.lightingQuality = zRange > 0.15 ? "harsh" : "good"
-        if (result.lightingQuality === "harsh") fireNudge("dim-lighting")
+        if (result.lightingQuality === "harsh") emit("dim-lighting")
       }
 
-      // ── Background Clutter ───────────────────
-      // Future: face detection confidence as proxy
-      // if (metrics.backgroundClutter) { ... }
-
-      // ── Noisy Environment ────────────────────
-      // Future: audio noise floor via AnalyserNode (Web Audio API)
-      // if (metrics.noisyEnvironment) { ... }
-
-      // ── Update cumulative scores ─────────────
-      const elapsed = sessionStartRef.current
-        ? (now - sessionStartRef.current) / 1000
-        : 0
-
-      setSessionScore({
-        eyeContactPercent:
-          totalFramesRef.current > 0
-            ? Math.round(
-                (eyeContactFramesRef.current / totalFramesRef.current) * 100
-              )
-            : 0,
-        composurePercent:
-          totalFramesRef.current > 0
-            ? Math.round(
-                (composureFramesRef.current / totalFramesRef.current) * 100
-              )
-            : 0,
-        fillerWordCount: 0, // managed by useAudioAnalysis
-        speechPaceAvg: null, // managed by useAudioAnalysis
-        totalPoints: 0, // calculated at session end
-        durationSeconds: Math.round(elapsed),
-      })
+      // ── Bucket tracking — 10-second windows for median scoring ──────
+      if (bucketStartRef.current === 0) bucketStartRef.current = now
+      bucketFramesRef.current++
+      if (result.eyeContact === true) bucketEcFramesRef.current++
+      if (result.composure === true) bucketCompFramesRef.current++
+      if (now - bucketStartRef.current >= BUCKET_MS && bucketFramesRef.current > 5) {
+        bucketDataRef.current.push({
+          ec: bucketEcFramesRef.current / bucketFramesRef.current,
+          comp: bucketCompFramesRef.current / bucketFramesRef.current,
+        })
+        bucketStartRef.current = now
+        bucketEcFramesRef.current = 0
+        bucketCompFramesRef.current = 0
+        bucketFramesRef.current = 0
+      }
 
       setFrameMetrics(result)
+
+      // Score throttled — no need for 60fps state updates
+      if (now - lastScoreUpdateRef.current >= SCORE_UPDATE_INTERVAL_MS) {
+        lastScoreUpdateRef.current = now
+        const elapsed = sessionStartRef.current
+          ? (now - sessionStartRef.current) / 1000
+          : 0
+
+        // Use median of completed buckets once we have 3+ (≥30s of data).
+        // Median prevents a brief good spell at the end from inflating the score.
+        const buckets = bucketDataRef.current
+        const rawEc = totalFramesRef.current > 0
+          ? eyeContactFramesRef.current / totalFramesRef.current
+          : 0
+        const rawComp = totalFramesRef.current > 0
+          ? composureFramesRef.current / totalFramesRef.current
+          : 0
+
+        setSessionScore({
+          eyeContactPercent: buckets.length >= 3
+            ? Math.round(medianOf(buckets.map((b) => b.ec)) * 100)
+            : Math.round(rawEc * 100),
+          composurePercent: buckets.length >= 3
+            ? Math.round(medianOf(buckets.map((b) => b.comp)) * 100)
+            : Math.round(rawComp * 100),
+          fillerWordCount: 0, // managed by useAudioAnalysis
+          speechPaceAvg: null, // managed by useAudioAnalysis
+          totalPoints: 0, // calculated at session end
+          durationSeconds: Math.round(elapsed),
+        })
+      }
     },
-    [config, fireNudge]
+    [emit]
   )
 
-  // ── Detection Loop ──────────────────────────
+  // ── No-face handler — occlusion / looking away ───────────────────
+  // Called every rAF when MediaPipe finds no landmarks.
+  // Increments total frames (penalty) but not good-metric frames,
+  // so covering the camera correctly lowers both scores.
+  const processNoFace = useCallback(() => {
+    const now = performance.now()
+    totalFramesRef.current++
+
+    // Reset velocity tracking — next valid frame shouldn't inherit stale delta
+    lastFrameTimeRef.current = null
+    prevNoseRef.current = null
+
+    // Bucket tracking — no-face frames count as missed ec + composure
+    if (bucketStartRef.current === 0) bucketStartRef.current = now
+    bucketFramesRef.current++
+    if (now - bucketStartRef.current >= BUCKET_MS && bucketFramesRef.current > 5) {
+      bucketDataRef.current.push({
+        ec: bucketEcFramesRef.current / bucketFramesRef.current,
+        comp: bucketCompFramesRef.current / bucketFramesRef.current,
+      })
+      bucketStartRef.current = now
+      bucketEcFramesRef.current = 0
+      bucketCompFramesRef.current = 0
+      bucketFramesRef.current = 0
+    }
+
+    // Sustained no-face → same nudge as eye contact lost
+    positiveStreakStart.current = null
+    if (!eyeLossStartRef.current) eyeLossStartRef.current = now
+    if (now - eyeLossStartRef.current >= EYE_CONTACT_LOSS_THRESHOLD_MS) {
+      emit("eye-contact-lost")
+      eyeLossStartRef.current = now
+    }
+  }, [emit])
+
+  // ── Detection Loop ───────────────────────────────────────────────
   useEffect(() => {
     if (!landmarkerRef.current || !isSessionActive || !videoRef.current) return
 
-    // Reset accumulators
     sessionStartRef.current = performance.now()
+    lastScoreUpdateRef.current = 0
     eyeContactFramesRef.current = 0
     composureFramesRef.current = 0
     totalFramesRef.current = 0
     prevNoseRef.current = null
-    positiveStreakStartRef.current = null
+    lastFrameTimeRef.current = null
+    positiveStreakStart.current = null
+    eyeLossStartRef.current = null
+    fidgetWindowRef.current = []
+    bucketDataRef.current = []
+    bucketStartRef.current = 0
+    bucketEcFramesRef.current = 0
+    bucketCompFramesRef.current = 0
+    bucketFramesRef.current = 0
+    setSessionScore(INITIAL_SCORE)
 
     const predict = () => {
       const video = videoRef.current
-      // Video must be in DOM and playing — not display:none
       if (!video || video.readyState < 2) {
         requestRef.current = requestAnimationFrame(predict)
         return
       }
-      const results = landmarkerRef.current!.detectForVideo(
+      const res = landmarkerRef.current!.detectForVideo(
         video,
         performance.now()
       )
-      if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-        processFrame(results.faceLandmarks[0])
+      if (res.faceLandmarks?.length > 0) {
+        processFrame(res.faceLandmarks[0])
+      } else {
+        processNoFace()
       }
       requestRef.current = requestAnimationFrame(predict)
     }
@@ -327,7 +411,7 @@ export function useFaceAnalysis(
         requestRef.current = undefined
       }
     }
-  }, [isSessionActive, processFrame, videoRef])
+  }, [isSessionActive, processFrame, processNoFace, videoRef])
 
-  return { frameMetrics, sessionScore, activeNudge, isReady }
+  return { frameMetrics, sessionScore, isReady }
 }

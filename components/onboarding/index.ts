@@ -1,4 +1,4 @@
-export { default as Onboarding } from "./Onboarding"
+export { default as Onboarding } from "./onboarding"
 export { ProgressDots } from "./ProgressDots"
 export { StepName } from "./StepName"
 export { StepPronouns } from "./StepPronouns"

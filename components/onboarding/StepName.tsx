@@ -23,13 +23,13 @@ export function StepName({ initial, onNext, inputRef }: StepNameProps) {
     <div className="flex flex-col gap-6 w-full">
       <div className="flex flex-col gap-2">
         <p className="font-mono text-xs tracking-widest text-primary uppercase truncate">
-          Welcome to Confidont
+          Hey, good to have you here.
         </p>
         <h2 className="font-mono text-xl sm:text-2xl leading-tight font-bold text-foreground">
-          What should we call you?
+          What's your name?
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Just your first name is fine.
+          First name is all we need.
         </p>
       </div>
       <Input

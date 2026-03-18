@@ -4,12 +4,18 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/hooks/useAuth"
 import AuthModal from "@/components/auth/AuthModal"
 import { generateFeedback } from "@/lib/ai/feedback"
+import type { SessionFeedback } from "@/lib/ai/feedback"
 import { saveSession } from "@/lib/storage/session"
+import type { SaveSessionResult } from "@/lib/storage/session"
 import {
   getGuestSessionCount,
   incrementGuestSessionCount,
 } from "@/lib/storage/guestSessions"
 import type { SessionResult } from "@/components/session/SessionAnalyzer"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface SessionSummaryProps {
   result: SessionResult
@@ -38,16 +44,17 @@ export default function SessionSummary({
 
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("loading")
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [guestCount, setGuestCount] = useState(0)
-  const [feedback, setFeedback] = useState<{
-    message: string
-    highlight: string
-    focusNext: string
-    pointsEarned: number
-  } | null>(null)
+  const [syncResult, setSyncResult] = useState<SaveSessionResult | null>(null)
+  // Lazy initializer — reads localStorage once at mount, no effect needed
+  const [guestCount, setGuestCount] = useState(() => getGuestSessionCount())
+  const [feedback, setFeedback] = useState<SessionFeedback | null>(null)
 
+  // Notify BetaFeedback to glow — session end is a great moment for feedback
   useEffect(() => {
-    setGuestCount(getGuestSessionCount())
+    const t = setTimeout(() => {
+      window.dispatchEvent(new Event("beta-feedback-glow"))
+    }, 2000) // delay so user reads feedback first
+    return () => clearTimeout(t)
   }, [])
 
   // Load feedback on mount
@@ -79,16 +86,19 @@ export default function SessionSummary({
   const handleSave = async () => {
     if (!feedback) return
 
-    await saveSession({
+    // Strip runtime-only field before persisting
+    const { aiGenerated: _, ...feedbackToStore } = feedback
+    const result_ = await saveSession({
       id: `session_${Date.now()}`,
       date: new Date().toISOString(),
       phase,
       topics: result.topics,
       score: { ...result.score, fillerWordCount: result.fillerWordCount },
-      feedback,
-      thumbnailDataUrl: null,
+      feedback: feedbackToStore,
+      thumbnailDataUrl: result.thumbnailDataUrl,
     })
 
+    setSyncResult(result_)
     setFeedbackState("saved")
 
     // Guest — increment and prompt auth
@@ -105,12 +115,13 @@ export default function SessionSummary({
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-6 text-foreground">
       {/* Header with back button */}
       <div className="relative flex w-full max-w-2xl items-center justify-center">
-        <button
+        <Button
+          variant="ghost"
           onClick={onBack}
-          className="absolute left-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="absolute left-0 font-mono text-xs text-muted-foreground"
         >
           ← home
-        </button>
+        </Button>
         <div className="flex flex-col gap-1 text-center">
           <h1 className="font-mono text-2xl font-bold text-primary">
             Confidont
@@ -122,75 +133,85 @@ export default function SessionSummary({
       </div>
 
       {/* Feedback card */}
-      <div className="w-full max-w-2xl space-y-5 rounded-2xl border border-border bg-card p-6">
-        {feedbackState === "loading" ? (
-          <div className="flex flex-col items-center gap-3 py-8">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="font-mono text-sm text-muted-foreground">
-              {personaName} is putting together your feedback...
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-1">
-              <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                {personaName}
-              </p>
-              <p className="font-mono text-base leading-relaxed text-foreground">
-                {feedback?.message}
+      <Card className="w-full max-w-2xl">
+        <CardContent className="space-y-5 p-6">
+          {feedbackState === "loading" ? (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Spinner className="size-5" />
+              <p className="font-mono text-sm text-muted-foreground">
+                {personaName} is putting together your feedback...
               </p>
             </div>
-
-            <div className="h-px bg-border" />
-
-            <div className="flex gap-3">
-              <span className="mt-0.5 text-primary">↑</span>
-              <div>
-                <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                  What went well
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                  {personaName}
                 </p>
-                <p className="font-mono text-sm text-foreground">
-                  {feedback?.highlight}
+                <p className="font-mono text-base leading-relaxed text-foreground">
+                  {feedback?.message}
                 </p>
               </div>
-            </div>
 
-            <div className="flex gap-3">
-              <span className="mt-0.5 text-muted-foreground">→</span>
-              <div>
-                <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                  Focus next time
-                </p>
-                <p className="font-mono text-sm text-foreground">
-                  {feedback?.focusNext}
-                </p>
+              <Separator />
+
+              <div className="flex gap-3">
+                <span className="mt-0.5 text-primary">↑</span>
+                <div>
+                  <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                    What went well
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    {feedback?.highlight}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="h-px bg-border" />
-
-            {(feedback?.pointsEarned ?? 0) > 0 && (
-              <div className="flex items-center justify-between">
-                <p className="font-mono text-xs text-muted-foreground">
-                  Points earned
-                </p>
-                <p className="font-mono text-lg font-bold text-primary">
-                  +{feedback?.pointsEarned}
-                </p>
+              <div className="flex gap-3">
+                <span className="mt-0.5 text-muted-foreground">→</span>
+                <div>
+                  <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                    Focus next time
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    {feedback?.focusNext}
+                  </p>
+                </div>
               </div>
-            )}
-          </>
-        )}
-      </div>
 
-      {/* Score grid */}
-      {feedbackState !== "loading" && (
+              {/* AI source indicator */}
+              {feedback && !feedback.aiGenerated && (
+                <p className="font-mono text-[10px] text-muted-foreground/40 text-center pt-1">
+                  Based on your session data · AI unavailable
+                </p>
+              )}
+
+              <Separator />
+
+              {(feedback?.pointsEarned ?? 0) > 0 && (
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-xs text-muted-foreground">
+                    Points earned
+                  </p>
+                  <p className="font-mono text-lg font-bold text-primary">
+                    +{feedback?.pointsEarned}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Score grid — hidden in Phase 1 (sessions 1-3).
+          Phase 1 goal: build safety. Scores activate from Phase 2 onward. */}
+      {feedbackState !== "loading" && phase > 1 && (
         <div className="grid w-full max-w-2xl grid-cols-3 gap-3">
           <ScoreCard
             label="Eye Contact"
-            value={`${result.score.eyeContactPercent}%`}
+            value={qualitativePresence(result.score.eyeContactPercent)}
             status={
-              result.score.eyeContactPercent >= 70
+              result.score.eyeContactPercent >= 65
                 ? "good"
                 : result.score.eyeContactPercent >= 40
                   ? "neutral"
@@ -199,9 +220,9 @@ export default function SessionSummary({
           />
           <ScoreCard
             label="Composure"
-            value={`${result.score.composurePercent}%`}
+            value={qualitativePresence(result.score.composurePercent)}
             status={
-              result.score.composurePercent >= 70
+              result.score.composurePercent >= 65
                 ? "good"
                 : result.score.composurePercent >= 40
                   ? "neutral"
@@ -210,7 +231,7 @@ export default function SessionSummary({
           />
           <ScoreCard
             label="Filler Words"
-            value={String(result.fillerWordCount)}
+            value={qualitativeFillers(result.fillerWordCount)}
             status={
               result.fillerWordCount === 0
                 ? "good"
@@ -226,7 +247,7 @@ export default function SessionSummary({
           />
           <ScoreCard
             label="Topics"
-            value={`${result.topics.length} of ${result.topics.length}`}
+            value={`${result.topics.length} covered`}
             status="good"
           />
           <ScoreCard
@@ -241,41 +262,71 @@ export default function SessionSummary({
       {feedbackState !== "loading" && (
         <div className="flex w-full max-w-xs flex-col items-center gap-3">
           {feedbackState === "ready" && (
-            <button
-              onClick={handleSave}
-              className="w-full rounded-full border border-primary px-8 py-3 font-mono text-sm font-bold text-primary transition-all duration-200 hover:bg-primary hover:text-primary-foreground"
-            >
-              Save Progress
-            </button>
+            <>
+              <Button
+                onClick={onRestart}
+                className="w-full rounded-full"
+              >
+                Go again
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSave}
+                className="w-full rounded-full"
+              >
+                Save progress
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onBack}
+                className="font-mono text-xs text-muted-foreground"
+              >
+                ← back to home
+              </Button>
+            </>
           )}
 
           {feedbackState === "saved" && (
-            <div className="flex w-full items-center justify-center gap-2 rounded-full border border-border px-8 py-3 font-mono text-sm text-muted-foreground">
-              <span className="text-primary">✓</span> Saved
+            <>
+              {/* Confirmation + sync status */}
+              <div className="flex flex-col items-center gap-1">
+                <p className="font-mono text-sm text-primary">
+                  ✓ Session saved
+                </p>
+                {syncResult?.syncedToCloud === false && (
+                  <p className="font-mono text-[11px] text-amber-500/80">
+                    Cloud sync failed — data is safe on this device
+                  </p>
+                )}
+                {syncResult?.syncedToCloud === true && (
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    Synced to your account
+                  </p>
+                )}
+              </div>
               {!user && (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="ml-2 font-bold text-primary transition-opacity hover:opacity-70"
+                  className="font-mono text-xs text-muted-foreground transition-opacity hover:opacity-70"
                 >
-                  — sync it →
+                  Sync to your account →
                 </button>
               )}
-            </div>
+              <Button
+                onClick={onRestart}
+                className="mt-1 w-full rounded-full"
+              >
+                Go again
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onBack}
+                className="font-mono text-xs text-muted-foreground"
+              >
+                ← back to home
+              </Button>
+            </>
           )}
-
-          <button
-            onClick={onRestart}
-            className="w-full rounded-full bg-primary px-8 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 hover:opacity-90"
-          >
-            Start Again
-          </button>
-
-          <button
-            onClick={onBack}
-            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            ← back to home
-          </button>
         </div>
       )}
 
@@ -298,6 +349,20 @@ function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
 }
 
+function qualitativePresence(percent: number): string {
+  if (percent >= 80) return "Excellent"
+  if (percent >= 65) return "Strong"
+  if (percent >= 45) return "Developing"
+  return "Needs work"
+}
+
+function qualitativeFillers(count: number): string {
+  if (count === 0) return "Clean"
+  if (count <= 2) return "Minimal"
+  if (count <= 5) return "A few"
+  return "Frequent"
+}
+
 function ScoreCard({
   label,
   value,
@@ -308,15 +373,17 @@ function ScoreCard({
   status: "good" | "bad" | "neutral"
 }) {
   return (
-    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
-      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p
-        className={`font-mono text-lg font-bold ${status === "good" ? "text-primary" : status === "bad" ? "text-destructive" : "text-muted-foreground"}`}
-      >
-        {value}
-      </p>
-    </div>
+    <Card>
+      <CardContent className="space-y-1 p-3.5">
+        <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+          {label}
+        </p>
+        <p
+          className={`font-mono text-lg font-bold ${status === "good" ? "text-primary" : status === "bad" ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {value}
+        </p>
+      </CardContent>
+    </Card>
   )
 }

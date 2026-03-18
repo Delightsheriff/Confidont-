@@ -3,69 +3,135 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import JourneyMap from "@/components/home/JourneyMap"
+import { Spinner } from "@/components/ui/spinner"
 import {
-  hasCompletedOnboarding,
+  getProfile,
   getProfileFromSupabase,
+  pushProfileToSupabase,
+  clearProfile,
 } from "@/lib/storage/user"
+import {
+  getProgress,
+  fetchProgressFromSupabase,
+  syncProgressFromSupabase,
+  clearProgress,
+} from "@/lib/storage/session"
+import { clearGuestSessionCount } from "@/lib/storage/guestSessions"
 import { useAuth } from "@/hooks/useAuth"
+import type { UserProfile } from "@/types/user"
+import type { UserProgress } from "@/lib/storage/session"
 
 // ─────────────────────────────────────────────
 // /home
 //
-// On mount, three scenarios:
+// Auth user — Supabase is always the source of truth:
+//   - Profile exists in Supabase → returning user.
+//     Discard any local onboarding data (could be a re-onboard
+//     after sign-out), push guest sessions, then load from Supabase.
+//   - No Supabase profile → new user finishing onboarding.
+//     Push local profile + sessions to Supabase, then load.
+//   - Neither → redirect to /onboarding
 //
-// 1. Has local profile → render JourneyMap
-// 2. No local profile, authenticated → pull from
-//    Supabase (new device / cleared browser)
-//    - Found → render JourneyMap
-//    - Not found → send to /onboarding
-// 3. No local profile, not authenticated → /onboarding
-//
-// Also syncs session progress from Supabase
-// whenever authenticated.
+// Guest user — localStorage only:
+//   - Has local profile → render
+//   - No profile → redirect to /
 // ─────────────────────────────────────────────
 
 export default function HomePage() {
   const router = useRouter()
   const { user, isInitialized } = useAuth()
-  const [ready, setReady] = useState(false)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [progress, setProgress] = useState<UserProgress | null>(null)
+  const [initError, setInitError] = useState(false)
 
   useEffect(() => {
     if (!isInitialized) return
 
     const init = async () => {
-      // Has local profile — fast path
-      if (hasCompletedOnboarding()) {
-        setReady(true)
+      setInitError(false)
+      try {
+      // ── Authenticated user ────────────────────
+      if (user) {
+        const supabaseProfile = await getProfileFromSupabase()
+
+        if (supabaseProfile) {
+          // Returning user — Supabase wins, discard any local re-onboard data
+          clearProfile()
+          // Still push any guest sessions they completed before signing in
+          await syncProgressFromSupabase()
+          clearProgress()
+          clearGuestSessionCount()
+        } else {
+          // New user — push their onboarding profile and guest sessions
+          const localProfile = getProfile()
+          if (!localProfile) {
+            // Authenticated but no profile anywhere → they skipped onboarding
+            // (e.g. signed in with Google before completing it)
+            router.replace("/onboarding")
+            return
+          }
+          await pushProfileToSupabase()
+          await syncProgressFromSupabase()
+          clearProfile()
+          clearProgress()
+          clearGuestSessionCount()
+        }
+
+        const resolvedProfile = supabaseProfile ?? (await getProfileFromSupabase())
+        if (!resolvedProfile) {
+          // Profile push may have failed — send back to onboarding to retry
+          router.replace("/onboarding")
+          return
+        }
+
+        const resolvedProgress = await fetchProgressFromSupabase()
+        setProfile(resolvedProfile)
+        setProgress(resolvedProgress)
         return
       }
 
-      // No local profile — check Supabase if authenticated
-      // (new device / cleared browser scenario)
-      if (user) {
-        const profile = await getProfileFromSupabase()
-        if (profile) {
-          // Found on Supabase — hydrated into localStorage by getProfileFromSupabase
-          setReady(true)
-          return
-        }
+      // ── Guest user ────────────────────────────
+      const localProfile = getProfile()
+      if (localProfile) {
+        setProfile(localProfile)
+        setProgress(getProgress())
+        return
       }
 
-      // No profile anywhere — needs onboarding
-      router.replace("/onboarding")
+      // No profile anywhere → back to landing
+      router.replace("/")
+      } catch (err) {
+        console.error("[home] init failed:", err)
+        setInitError(true)
+      }
     }
 
     init()
   }, [user, isInitialized, router])
 
-  // Show loading while checking auth (should be instant with SSR)
-  if (!isInitialized || !ready) {
+  if (initError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6">
+        <p className="font-mono text-sm text-muted-foreground text-center">
+          Something went wrong loading your profile.
+        </p>
+        <button
+          onClick={() => { setInitError(false); setProfile(null); setProgress(null) }}
+          className="font-mono text-xs text-primary underline underline-offset-4"
+        >
+          Try again
+        </button>
       </div>
     )
   }
 
-  return <JourneyMap />
+  if (!isInitialized || !profile || !progress) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Spinner className="size-5" />
+      </div>
+    )
+  }
+
+  return <JourneyMap profile={profile} progress={progress} />
 }

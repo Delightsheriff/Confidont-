@@ -2,11 +2,10 @@
 // lib/ai/feedback.ts
 //
 // Post-session feedback generation.
-// Stub implementation — returns persona-toned
-// hardcoded feedback based on scores.
+// Calls /api/session/feedback (server-side Groq).
+// Falls back to score-based stub if the API fails —
+// the session summary must always render something.
 //
-// To swap: replace generateFeedback internals with
-// a Vercel AI SDK streamText call to /api/session/feedback
 // Nothing that imports this file needs to change.
 // ─────────────────────────────────────────────
 
@@ -23,59 +22,94 @@ export interface GenerateFeedbackInput {
 }
 
 export interface SessionFeedback {
-  message: string // persona's post-session message
-  highlight: string // one thing that went well
-  focusNext: string // one thing to work on next session
+  message: string
+  highlight: string
+  focusNext: string
   pointsEarned: number
+  aiGenerated?: boolean  // present at runtime; absent in stored session data
 }
 
-// STUB — swap internals for real API call when ready
 export async function generateFeedback(
   input: GenerateFeedbackInput
 ): Promise<SessionFeedback> {
+  if (process.env.NEXT_PUBLIC_AI_ENABLED !== "false") {
+    try {
+      const res = await fetch("/api/session/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      })
+
+      if (res.ok) {
+        const feedback: SessionFeedback = await res.json()
+        if (feedback.message && feedback.highlight && feedback.focusNext)
+          return { ...feedback, aiGenerated: true }
+      } else {
+        console.warn(
+          "[generateFeedback] API returned",
+          res.status,
+          "— falling back to stub"
+        )
+      }
+    } catch (err) {
+      console.warn(
+        "[generateFeedback] fetch failed — falling back to stub:",
+        err
+      )
+    }
+  }
+
+  // ── Fallback — score-based stub ───────────────────────────────────
   if (process.env.NODE_ENV === "development") {
     await new Promise((r) => setTimeout(r, 600))
   }
 
   const {
-    personaName,
     userName,
     eyeContactPercent,
     composurePercent,
     fillerWordCount,
     durationSeconds,
     phase,
+    totalSessions,
   } = input
 
-  // Determine highlight based on best metric
   const highlight =
     eyeContactPercent >= composurePercent
-      ? `Your eye contact was at ${eyeContactPercent}% — that's real progress.`
-      : `You stayed composed and steady throughout — ${composurePercent}% composure is solid.`
+      ? eyeContactPercent >= 65
+        ? "Your eye contact felt natural and present — that kind of connection comes through clearly on camera."
+        : "You were working to stay with the camera, and that effort is exactly how this gets easier."
+      : composurePercent >= 65
+        ? "You stayed grounded and still the whole way through — that calm reads as real confidence."
+        : "Staying settled is something you were working on today, and noticing it is already half the work."
 
-  // Determine focus based on weakest metric
   const focusNext =
-    eyeContactPercent < composurePercent
-      ? "Next session, try to keep your gaze toward the camera a little longer."
-      : fillerWordCount > 3
-        ? "Try replacing filler words with a short pause — silence reads as confidence."
-        : "Keep building on your composure — you're finding your rhythm."
+    eyeContactPercent < 45
+      ? "Next session, try treating the camera lens like a person's eyes — soft focus, not a stare. Look just above it if direct feels like too much."
+      : composurePercent < 45
+        ? "See if you can find where the restlessness lives — shoulders, hands, posture. Just pick one thing to let settle."
+        : fillerWordCount > 3
+          ? "When you feel a filler word coming, try a breath instead. A short pause reads as confidence, not hesitation."
+          : "You're building something real here. Stay consistent and let the reps do the work."
 
-  // Phase-appropriate opening tone
   const opening =
-    phase === 1
-      ? `Great first step, ${userName}.`
-      : phase === 2
+    totalSessions === 0
+      ? `You showed up. That's the hardest part, ${userName}, and you did it.`
+      : phase === 1
         ? `Good session, ${userName}.`
-        : `Strong work today, ${userName}.`
+        : phase === 2
+          ? `You're finding your rhythm, ${userName}.`
+          : `Solid work today, ${userName}.`
 
-  const message = `${opening} ${highlight} ${
-    durationSeconds >= 60
-      ? "You stayed with it the whole way through."
-      : "Even short sessions build the habit."
-  }`
+  const closing =
+    totalSessions === 0
+      ? "First sessions are about getting comfortable being here — and you did that."
+      : durationSeconds >= 60
+        ? "You stayed with it the whole way through."
+        : "Even short sessions compound over time."
 
-  // Points calculation — rough formula, tune with real data later
+  const message = `${opening} ${highlight} ${closing}`
+
   const points = Math.round(
     eyeContactPercent * 0.4 +
       composurePercent * 0.3 +
@@ -83,5 +117,5 @@ export async function generateFeedback(
       Math.min(durationSeconds / 60, 2) * 10
   )
 
-  return { message, highlight, focusNext, pointsEarned: points }
+  return { message, highlight, focusNext, pointsEarned: points, aiGenerated: false }
 }

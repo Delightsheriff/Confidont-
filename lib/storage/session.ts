@@ -68,39 +68,59 @@ export function getSessionById(id: string): StoredSession | null {
 
 // ── Write ─────────────────────────────────────
 
-// Save to localStorage first (never blocks), then push to Supabase if authenticated
-export async function saveSession(session: StoredSession): Promise<void> {
-  if (typeof window === "undefined") return
+export interface SaveSessionResult {
+  localSaved: boolean
+  // null = user not authenticated (cloud sync not attempted)
+  // true = synced successfully
+  // false = sync attempted but failed
+  syncedToCloud: boolean | null
+}
+
+// Save to localStorage first (never blocks), then push to Supabase if authenticated.
+// Returns sync status so callers can surface failures to the user.
+export async function saveSession(session: StoredSession): Promise<SaveSessionResult> {
+  if (typeof window === "undefined") return { localSaved: false, syncedToCloud: null }
 
   // Always write to localStorage first — auth never blocks saving
+  let localSaved = false
   try {
     const progress = getProgress()
     const updated = updateProgress(progress, session)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    localSaved = true
   } catch (err) {
     console.error("Failed to save session locally:", err)
   }
 
-  // Push to Supabase if authenticated (non-blocking)
+  // Push to Supabase if authenticated
   try {
     const supabase = createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from("sessions").upsert({
-        id: session.id,
-        user_id: user.id,
-        date: session.date,
-        phase: session.phase,
-        topics: session.topics,
-        score: session.score,
-        feedback: session.feedback,
-        thumbnail_data_url: session.thumbnailDataUrl,
-      })
+
+    if (!user) return { localSaved, syncedToCloud: null }
+
+    const { error } = await supabase.from("sessions").upsert({
+      id: session.id,
+      user_id: user.id,
+      date: session.date,
+      phase: session.phase,
+      topics: session.topics,
+      score: session.score,
+      feedback: session.feedback,
+      thumbnail_data_url: session.thumbnailDataUrl,
+    })
+
+    if (error) {
+      console.error("Supabase session push failed:", error.message)
+      return { localSaved, syncedToCloud: false }
     }
+
+    return { localSaved, syncedToCloud: true }
   } catch (err) {
-    console.error("Supabase session push failed (non-blocking):", err)
+    console.error("Supabase session push failed:", err)
+    return { localSaved, syncedToCloud: false }
   }
 }
 
@@ -198,7 +218,9 @@ function avg(nums: number[]): number {
 
 // ── Sync ─────────────────────────────────────
 
-// Push local sessions to Supabase and hydrate local cache from server
+// Pushes any locally stored guest sessions up to Supabase.
+// Called once after sign-in to transfer guest progress.
+// Does NOT write anything back to localStorage.
 export async function syncProgressFromSupabase(): Promise<void> {
   if (typeof window === "undefined") return
   try {
@@ -209,23 +231,35 @@ export async function syncProgressFromSupabase(): Promise<void> {
     if (!user) return
 
     const localProgress = getProgress()
+    if (localProgress.sessions.length === 0) return
 
-    // Push local sessions to Supabase
-    if (localProgress.sessions.length > 0) {
-      const rows = localProgress.sessions.map((s) => ({
-        id: s.id,
-        user_id: user.id,
-        date: s.date,
-        phase: s.phase,
-        topics: s.topics,
-        score: s.score,
-        feedback: s.feedback,
-        thumbnail_data_url: s.thumbnailDataUrl,
-      }))
-      await supabase.from("sessions").upsert(rows, { onConflict: "id" })
-    }
+    const rows = localProgress.sessions.map((s) => ({
+      id: s.id,
+      user_id: user.id,
+      date: s.date,
+      phase: s.phase,
+      topics: s.topics,
+      score: s.score,
+      feedback: s.feedback,
+      thumbnail_data_url: s.thumbnailDataUrl,
+    }))
+    await supabase.from("sessions").upsert(rows, { onConflict: "id" })
+  } catch (err) {
+    console.error("syncProgressFromSupabase failed:", err)
+  }
+}
 
-    // Pull all sessions from Supabase and rebuild local cache
+// Fetches all sessions from Supabase and returns a UserProgress object.
+// Does NOT write to localStorage — data lives in React state only.
+export async function fetchProgressFromSupabase(): Promise<UserProgress> {
+  if (typeof window === "undefined") return { ...DEFAULT_PROGRESS }
+  try {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { ...DEFAULT_PROGRESS }
+
     const { data: serverRows } = await supabase
       .from("sessions")
       .select("*")
@@ -233,31 +267,31 @@ export async function syncProgressFromSupabase(): Promise<void> {
       .order("date", { ascending: false })
       .limit(100)
 
-    if (serverRows && serverRows.length > 0) {
-      const sessions: StoredSession[] = serverRows.map(
-        (r: Record<string, unknown>) => ({
-          id: r.id as string,
-          date: r.date as string,
-          phase: r.phase as number,
-          topics: r.topics as SessionTopic[],
-          score: r.score as SessionScore,
-          feedback: r.feedback as SessionFeedback | null,
-          thumbnailDataUrl: (r.thumbnail_data_url as string) ?? null,
-        })
-      )
+    if (!serverRows || serverRows.length === 0) return { ...DEFAULT_PROGRESS }
 
-      // Rebuild progress from all server sessions
-      const sorted = [...sessions].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      )
-      let progress: UserProgress = { ...DEFAULT_PROGRESS }
-      for (const session of sorted) {
-        progress = updateProgress(progress, session)
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
+    const sessions: StoredSession[] = serverRows.map(
+      (r: Record<string, unknown>) => ({
+        id: r.id as string,
+        date: r.date as string,
+        phase: r.phase as number,
+        topics: r.topics as SessionTopic[],
+        score: r.score as SessionScore,
+        feedback: r.feedback as SessionFeedback | null,
+        thumbnailDataUrl: (r.thumbnail_data_url as string) ?? null,
+      })
+    )
+
+    const sorted = [...sessions].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
+    let progress: UserProgress = { ...DEFAULT_PROGRESS }
+    for (const session of sorted) {
+      progress = updateProgress(progress, session)
     }
+    return progress
   } catch (err) {
-    console.error("syncProgressFromSupabase failed:", err)
+    console.error("fetchProgressFromSupabase failed:", err)
+    return { ...DEFAULT_PROGRESS }
   }
 }
 

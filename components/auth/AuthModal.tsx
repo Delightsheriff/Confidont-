@@ -2,6 +2,14 @@
 
 import { useState } from "react"
 import { useAuth } from "@/hooks/useAuth"
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+} from "@/components/ui/drawer"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
 
 // ─────────────────────────────────────────────
 // AuthModal
@@ -59,112 +67,112 @@ export default function AuthModal({
   const { headline, subtext } = getCopy(context, guestSessionCount)
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-background/70 backdrop-blur-sm"
-        onClick={onDismiss}
-      />
+    <Drawer open onOpenChange={(open) => { if (!open) onDismiss() }}>
+      <DrawerContent className="mx-auto max-w-lg px-6 pb-10">
+        <DrawerHeader className="px-0 pt-2 pb-0">
+          <div className="mx-auto mb-4 h-1 w-8 rounded-full bg-border" />
+        </DrawerHeader>
 
-      {/* Sheet */}
-      <div className="fixed right-0 bottom-0 left-0 z-50 mx-auto max-w-lg animate-in space-y-5 rounded-t-2xl border-t border-border bg-card px-6 pt-6 pb-10 duration-300 slide-in-from-bottom">
-        <div className="mx-auto h-1 w-8 rounded-full bg-border" />
-
-        {modalState === "magic-sent" ? (
-          <div className="space-y-3 py-4 text-center">
-            <p className="text-2xl">📬</p>
-            <p className="font-mono font-bold text-foreground">
-              Check your email.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              We sent a sign-in link to{" "}
-              <span className="text-foreground">{email}</span>. Click it to
-              continue.
-            </p>
-            <button
-              onClick={onDismiss}
-              className="mt-2 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-1">
-              <p className="font-mono text-base font-bold text-foreground">
-                {headline}
+        <div className="space-y-5">
+          {modalState === "magic-sent" ? (
+            <div className="space-y-3 py-4 text-center">
+              <p className="text-2xl">📬</p>
+              <p className="font-mono font-bold text-foreground">
+                Check your email.
               </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {subtext}
+              <p className="text-sm text-muted-foreground">
+                We sent a sign-in link to{" "}
+                <span className="text-foreground">{email}</span>. Click it to
+                continue.
               </p>
-            </div>
-
-            <div className="space-y-3">
-              {/* Google */}
-              <button
-                onClick={handleGoogle}
-                disabled={modalState === "loading"}
-                className="flex w-full items-center justify-center gap-3 rounded-full border border-border py-3.5 font-mono text-sm font-bold text-foreground transition-all hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50"
-              >
-                <GoogleIcon />
-                Continue with Google
-              </button>
-
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-border" />
-                <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                  or
-                </span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-
-              {/* Magic link */}
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleMagicLink()}
-                  placeholder="your@email.com"
-                  className="flex-1 rounded-full border border-border bg-background px-5 py-3 font-mono text-sm text-foreground transition-colors outline-none placeholder:text-muted-foreground/40 focus:border-primary"
-                />
-                <button
-                  onClick={handleMagicLink}
-                  disabled={
-                    modalState === "loading" || !isValidEmail(email.trim())
-                  }
-                  className={`shrink-0 rounded-full px-5 py-3 font-mono text-sm font-bold transition-all ${
-                    modalState === "loading" || !isValidEmail(email.trim())
-                      ? "cursor-not-allowed bg-muted text-muted-foreground"
-                      : "bg-primary text-primary-foreground hover:opacity-90"
-                  }`}
-                >
-                  {modalState === "loading" ? "..." : "→"}
-                </button>
-              </div>
-
-              {modalState === "error" && errorMsg && (
-                <p className="text-center font-mono text-xs text-destructive">
-                  {errorMsg}
-                </p>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <p className="font-mono text-[10px] text-muted-foreground/50">
-                No password needed.
-              </p>
-              <button
+              <Button
+                variant="ghost"
                 onClick={onDismiss}
-                className="font-mono text-[10px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                className="mt-2 font-mono text-xs text-muted-foreground"
               >
-                Maybe later
-              </button>
+                Close
+              </Button>
             </div>
-          </>
-        )}
-      </div>
-    </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="font-mono text-base font-bold text-foreground">
+                  {headline}
+                </p>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {subtext}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* Google */}
+                <Button
+                  onClick={handleGoogle}
+                  disabled={modalState === "loading"}
+                  variant="outline"
+                  className="flex w-full items-center justify-center gap-3 rounded-full border border-border py-3.5 font-mono text-sm font-bold text-foreground hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <GoogleIcon />
+                  Continue with Google
+                </Button>
+
+                <div className="flex items-center gap-3">
+                  <Separator className="flex-1" />
+                  <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                    or
+                  </span>
+                  <Separator className="flex-1" />
+                </div>
+
+                {/* Magic link */}
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleMagicLink()}
+                    placeholder="your@email.com"
+                    className="flex-1 rounded-full border border-border bg-background px-5 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary"
+                  />
+                  <Button
+                    onClick={handleMagicLink}
+                    disabled={
+                      modalState === "loading" || !isValidEmail(email.trim())
+                    }
+                    className={`shrink-0 rounded-full px-5 py-3 font-mono text-sm font-bold transition-all ${
+                      modalState === "loading" || !isValidEmail(email.trim())
+                        ? "cursor-not-allowed bg-muted text-muted-foreground"
+                        : "bg-primary text-primary-foreground hover:opacity-90"
+                    }`}
+                  >
+                    {modalState === "loading" ? "..." : "→"}
+                  </Button>
+                </div>
+
+                {modalState === "error" && errorMsg && (
+                  <p className="text-center font-mono text-xs text-destructive">
+                    {errorMsg}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-[10px] text-muted-foreground/50">
+                  No password needed.
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={onDismiss}
+                  className="font-mono text-[10px] text-muted-foreground/50 hover:text-muted-foreground"
+                >
+                  Maybe later
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
   )
 }
 

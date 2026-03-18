@@ -37,10 +37,10 @@ export function StepCameraConfidence({
           Honest question.
         </p>
         <h2 className="font-mono text-lg sm:text-2xl leading-tight font-bold text-foreground">
-          How would you describe yourself on camera right now, {name}?
+          Where are you starting from, {name}?
         </h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          No judgment. This helps us start in the right place.
+          No judgment at all — this just helps us meet you where you are.
         </p>
       </div>
       <div className="flex w-full flex-col gap-2">
