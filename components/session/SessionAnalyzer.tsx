@@ -12,6 +12,8 @@ import type { SessionScore } from "@/types/session"
 import type { Persona } from "@/types/user"
 import { PersonaAnimationState, PersonaDisplay } from "../persona/PersonaSVGs"
 import { useNudgeArbiter } from "@/hooks/Usenudgearbiter"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 
 // ─────────────────────────────────────────────
 // SessionAnalyzer
@@ -343,12 +345,13 @@ export default function SessionAnalyzer({
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <header className="flex items-center justify-between px-6 pt-6 pb-2">
-        <button
+        <Button
+          variant="ghost"
           onClick={onBack}
-          className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="font-mono text-xs text-muted-foreground"
         >
           ← back
-        </button>
+        </Button>
         <p className="font-mono text-xs text-muted-foreground">
           {sessionState === "active"
             ? `${topicIndex + 1} / ${topics.length}`
@@ -412,7 +415,7 @@ export default function SessionAnalyzer({
         {/* ── Loading state ───────────────────────────────────────────── */}
         {sessionState === "loading-topics" && (
           <div className="flex flex-col items-center gap-3 text-center">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <Spinner className="size-4" />
             <p className="font-mono text-sm text-muted-foreground">
               {persona.name} is preparing your session...
             </p>
@@ -532,63 +535,65 @@ export default function SessionAnalyzer({
 
         <div className="flex items-center gap-3">
           {sessionState === "active" && (
-            <button
+            <Button
+              variant="outline"
               onClick={restartSession}
-              className="rounded-full border border-border px-6 py-2.5 font-mono text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+              size="sm"
             >
               restart
-            </button>
+            </Button>
           )}
 
           {sessionState === "idle" && (
-            <button
-              onClick={startSession}
+            <Button
               disabled={!isReady}
-              className={`rounded-full px-10 py-3 font-mono text-sm font-bold transition-all duration-200 ${
-                !isReady
-                  ? "cursor-not-allowed bg-muted text-muted-foreground"
-                  : "bg-primary text-primary-foreground hover:opacity-90"
-              }`}
+              onClick={startSession}
+              className="rounded-full px-10"
+              size="lg"
             >
               {isReady ? "Start Session" : "Loading..."}
-            </button>
+            </Button>
           )}
 
           {sessionState === "loading-topics" && (
-            <button
+            <Button
               disabled
-              className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+              className="rounded-full px-10"
+              size="lg"
             >
               Getting ready...
-            </button>
+            </Button>
           )}
 
           {sessionState === "active" && canAdvance && (
-            <button
+            <Button
               onClick={nextTopic}
-              className="animate-in rounded-full bg-primary px-10 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 fade-in slide-in-from-bottom-1 hover:opacity-90"
+              className="animate-in rounded-full px-10 fade-in slide-in-from-bottom-1"
+              size="lg"
             >
               {topicIndex < topics.length - 1 ? "Next →" : "Finish"}
-            </button>
+            </Button>
           )}
 
           {sessionState === "active" && !canAdvance && (
-            <button
+            <Button
               disabled
-              className="cursor-not-allowed rounded-full bg-muted px-10 py-3 font-mono text-sm font-bold text-muted-foreground"
+              className="rounded-full px-10"
+              size="lg"
             >
               keep going...
-            </button>
+            </Button>
           )}
         </div>
 
         {sessionState === "idle" && onBack && (
-          <button
+          <Button
+            variant="ghost"
             onClick={onBack}
-            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="font-mono text-xs text-muted-foreground"
           >
             ← back
-          </button>
+          </Button>
         )}
 
         {isDev && (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import JourneyMap from "@/components/home/JourneyMap"
+import { Spinner } from "@/components/ui/spinner"
 import {
   getProfile,
   getProfileFromSupabase,
@@ -101,7 +102,7 @@ export default function HomePage() {
   if (!isInitialized || !profile || !progress) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <Spinner className="size-5" />
       </div>
     )
   }

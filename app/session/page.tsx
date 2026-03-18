@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import SessionAnalyzer, {
   type SessionResult,
 } from "@/components/session/SessionAnalyzer"
+import { Spinner } from "@/components/ui/spinner"
 import SessionSummary from "@/components/session/SessionSummary"
 import { getProgress, fetchProgressFromSupabase } from "@/lib/storage/session"
 import { getProfile, getProfileFromSupabase } from "@/lib/storage/user"
@@ -74,7 +75,7 @@ export default function SessionPage() {
   if (pageState === "checking" || !profile || !progress) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <Spinner className="size-5" />
       </div>
     )
   }

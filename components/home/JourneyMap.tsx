@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { getDailyStatus } from "@/lib/logic/dailyLimit"
 import { useAuth } from "@/hooks/useAuth"
 import AuthModal from "@/components/auth/AuthModal"
@@ -11,6 +12,22 @@ import type { UserProgress } from "@/lib/storage/session"
 import type { DailyStatus } from "@/lib/logic/dailyLimit"
 import { FREE_SESSION_LIMIT, SESSION_PEEK_AHEAD } from "@/configs/tiers"
 import type { User } from "@supabase/supabase-js"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
 
 // ─────────────────────────────────────────────
 // JourneyMap
@@ -87,32 +104,16 @@ export default function JourneyMap({
   const router = useRouter()
   const { user, signOut } = useAuth()
 
-  const [toast, setToast] = useState<string | null>(null)
   const [showDayNudge, setShowDayNudge] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!showUserMenu) return
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowUserMenu(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [showUserMenu])
 
   const handleSignOut = async () => {
-    setShowUserMenu(false)
     await signOut()
     router.replace("/")
   }
 
   const fireToast = useCallback((msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2000)
+    toast(msg)
   }, [])
 
   const persona =
@@ -159,70 +160,66 @@ export default function JourneyMap({
           </h1>
 
           {user ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setShowUserMenu((v) => !v)}
-                className="flex items-center gap-2 rounded-full px-1 py-1 transition-colors hover:bg-muted/50"
-              >
-                <UserAvatar user={user} personaColor={persona.colorAccent} size="sm" />
-                <span className="font-mono text-xs text-muted-foreground">
-                  {user.user_metadata?.full_name ?? profile.name}
-                </span>
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 10 10"
-                  fill="none"
-                  className={`text-muted-foreground/50 transition-transform duration-200 ${showUserMenu ? "rotate-180" : ""}`}
-                >
-                  <path
-                    d="M2 3.5l3 3 3-3"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              {showUserMenu && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-52 animate-in rounded-xl border border-border bg-card p-1 shadow-lg duration-150 fade-in slide-in-from-top-1">
-                  {/* User info */}
-                  <div className="flex items-center gap-3 px-3 py-2.5">
-                    <UserAvatar user={user} personaColor={persona.colorAccent} size="md" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-mono text-xs font-bold text-foreground truncate">
-                        {user.user_metadata?.full_name ?? profile.name}
-                      </p>
-                      {user.email && (
-                        <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
-                          {user.email}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="my-1 h-px bg-border" />
-
-                  {/* Sign out */}
-                  <button
-                    onClick={handleSignOut}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 font-mono text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full px-1 py-1 transition-colors hover:bg-muted/50">
+                  <UserAvatar user={user} personaColor={persona.colorAccent} size="sm" />
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {user.user_metadata?.full_name ?? profile.name}
+                  </span>
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    className="text-muted-foreground/50 transition-transform duration-200"
                   >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path
-                        d="M4.5 2H2.5A1 1 0 001.5 3v6a1 1 0 001 1h2M8 8.5L10.5 6 8 3.5M4.5 6h6"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    Sign out
-                  </button>
+                    <path
+                      d="M2 3.5l3 3 3-3"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {/* User info */}
+                <div className="flex items-center gap-3 px-3 py-2.5">
+                  <UserAvatar user={user} personaColor={persona.colorAccent} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-xs font-bold text-foreground truncate">
+                      {user.user_metadata?.full_name ?? profile.name}
+                    </p>
+                    {user.email && (
+                      <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <DropdownMenuSeparator className="my-1" />
+
+                {/* Sign out */}
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="flex items-center gap-2 font-mono text-xs text-muted-foreground hover:text-destructive focus:text-destructive"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M4.5 2H2.5A1 1 0 001.5 3v6a1 1 0 001 1h2M8 8.5L10.5 6 8 3.5M4.5 6h6"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <button
               onClick={() => setShowAuthModal(true)}
@@ -311,25 +308,17 @@ export default function JourneyMap({
       </div>
 
       {/* Daily limit nudge — soft, user chooses */}
-      {showDayNudge && (
-        <DayNudgeModal
-          limitForToday={daily.limitForToday}
-          personaName={persona.name}
-          nextUnlockDate={daily.nextUnlockDate}
-          onDismiss={() => setShowDayNudge(false)}
-          onKeepGoing={() => {
-            setShowDayNudge(false)
-            router.push("/session")
-          }}
-        />
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2 animate-in rounded-full bg-foreground px-5 py-2.5 font-mono text-xs text-background shadow-lg duration-200 fade-in slide-in-from-bottom-2">
-          {toast}
-        </div>
-      )}
+      <DayNudgeModal
+        open={showDayNudge}
+        limitForToday={daily.limitForToday}
+        personaName={persona.name}
+        nextUnlockDate={daily.nextUnlockDate}
+        onDismiss={() => setShowDayNudge(false)}
+        onKeepGoing={() => {
+          setShowDayNudge(false)
+          router.push("/session")
+        }}
+      />
 
       {/* Auth modal — guest sign in */}
       {showAuthModal && (
@@ -559,12 +548,14 @@ const cardStyles: Record<SessionCardState, string> = {
 // ─────────────────────────────────────────────
 
 function DayNudgeModal({
+  open,
   limitForToday,
   personaName,
   nextUnlockDate,
   onDismiss,
   onKeepGoing,
 }: {
+  open: boolean
   limitForToday: number
   personaName: string
   nextUnlockDate: string
@@ -572,38 +563,35 @@ function DayNudgeModal({
   onKeepGoing: () => void
 }) {
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm"
-        onClick={onDismiss}
-      />
-      <div className="fixed right-0 bottom-0 left-0 z-50 mx-auto max-w-lg animate-in space-y-5 rounded-t-2xl border-t border-border bg-card px-6 pt-6 pb-10 duration-300 slide-in-from-bottom">
-        <div className="mx-auto h-1 w-8 rounded-full bg-border" />
-        <div className="space-y-1.5">
-          <p className="font-mono text-base font-bold text-foreground">
+    <Drawer open={open} onOpenChange={(o) => { if (!o) onDismiss() }}>
+      <DrawerContent className="mx-auto max-w-lg px-6 pb-10">
+        <DrawerHeader className="px-0 pt-2">
+          <div className="mx-auto h-1 w-8 rounded-full bg-border" />
+          <DrawerTitle className="font-mono text-base font-bold text-foreground text-left mt-3">
             That&apos;s your {limitForToday} for today.
-          </p>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          </DrawerTitle>
+          <p className="text-sm leading-relaxed text-muted-foreground text-left">
             {personaName} will be here {nextUnlockDate}. But if you want to keep
             going - you&apos;ve earned it.
           </p>
-        </div>
-        <div className="space-y-2">
-          <button
+        </DrawerHeader>
+        <DrawerFooter className="px-0 space-y-2">
+          <Button
             onClick={onKeepGoing}
-            className="w-full rounded-full bg-primary py-3.5 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90"
+            className="w-full rounded-full py-3.5 font-mono text-sm font-bold"
           >
             Keep going →
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={onDismiss}
-            className="w-full rounded-full border border-border py-3.5 font-mono text-sm font-bold text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground"
+            className="w-full rounded-full border border-border py-3.5 font-mono text-sm font-bold text-muted-foreground hover:border-primary/30 hover:text-foreground"
           >
             See you {nextUnlockDate}
-          </button>
-        </div>
-      </div>
-    </>
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }
 

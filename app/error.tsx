@@ -4,6 +4,8 @@
 // Global error boundary — catches unhandled runtime errors
 
 import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface ErrorProps {
   error: Error & { digest?: string }
@@ -44,41 +46,46 @@ export default function ErrorPage({ error, reset }: ErrorProps) {
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-6">
-        <div className="space-y-1.5">
-          <p className="font-mono text-sm font-bold text-foreground">
-            Something broke.
-          </p>
-          <p className="font-mono text-xs leading-relaxed text-muted-foreground">
-            An unexpected error occurred. Your progress is safe — this is on us,
-            not you.
-          </p>
-        </div>
-
-        {/* Error digest for debugging */}
-        {error.digest && (
-          <div className="rounded-lg border border-border bg-background px-3 py-2">
-            <p className="font-mono text-[10px] text-muted-foreground/50">
-              ref: {error.digest}
+      <Card className="w-full max-w-sm">
+        <CardContent className="space-y-4 p-6">
+          <div className="space-y-1.5">
+            <p className="font-mono text-sm font-bold text-foreground">
+              Something broke.
+            </p>
+            <p className="font-mono text-xs leading-relaxed text-muted-foreground">
+              An unexpected error occurred. Your progress is safe — this is on us,
+              not you.
             </p>
           </div>
-        )}
 
-        <div className="space-y-2 pt-1">
-          <button
-            onClick={reset}
-            className="w-full rounded-full bg-primary py-3 font-mono text-sm font-bold text-primary-foreground transition-all hover:opacity-90"
-          >
-            Try again
-          </button>
-          <button
-            onClick={() => router.push("/")}
-            className="w-full rounded-full border border-border py-3 font-mono text-sm font-bold text-muted-foreground transition-all hover:border-primary/30 hover:text-foreground"
-          >
-            Back to home
-          </button>
-        </div>
-      </div>
+          {/* Error digest for debugging */}
+          {error.digest && (
+            <div className="rounded-lg border border-border bg-background px-3 py-2">
+              <p className="font-mono text-[10px] text-muted-foreground/50">
+                ref: {error.digest}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2 pt-1">
+            <Button
+              onClick={reset}
+              className="w-full rounded-full"
+              size="lg"
+            >
+              Try again
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/")}
+              className="w-full rounded-full"
+              size="lg"
+            >
+              Back to home
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

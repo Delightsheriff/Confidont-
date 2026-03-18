@@ -10,6 +10,10 @@ import {
   incrementGuestSessionCount,
 } from "@/lib/storage/guestSessions"
 import type { SessionResult } from "@/components/session/SessionAnalyzer"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface SessionSummaryProps {
   result: SessionResult
@@ -102,12 +106,13 @@ export default function SessionSummary({
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-6 text-foreground">
       {/* Header with back button */}
       <div className="relative flex w-full max-w-2xl items-center justify-center">
-        <button
+        <Button
+          variant="ghost"
           onClick={onBack}
-          className="absolute left-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="absolute left-0 font-mono text-xs text-muted-foreground"
         >
           ← home
-        </button>
+        </Button>
         <div className="flex flex-col gap-1 text-center">
           <h1 className="font-mono text-2xl font-bold text-primary">
             Confidont
@@ -119,66 +124,68 @@ export default function SessionSummary({
       </div>
 
       {/* Feedback card */}
-      <div className="w-full max-w-2xl space-y-5 rounded-2xl border border-border bg-card p-6">
-        {feedbackState === "loading" ? (
-          <div className="flex flex-col items-center gap-3 py-8">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="font-mono text-sm text-muted-foreground">
-              {personaName} is putting together your feedback...
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-1">
-              <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                {personaName}
-              </p>
-              <p className="font-mono text-base leading-relaxed text-foreground">
-                {feedback?.message}
+      <Card className="w-full max-w-2xl">
+        <CardContent className="space-y-5 p-6">
+          {feedbackState === "loading" ? (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Spinner className="size-5" />
+              <p className="font-mono text-sm text-muted-foreground">
+                {personaName} is putting together your feedback...
               </p>
             </div>
-
-            <div className="h-px bg-border" />
-
-            <div className="flex gap-3">
-              <span className="mt-0.5 text-primary">↑</span>
-              <div>
-                <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                  What went well
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                  {personaName}
                 </p>
-                <p className="font-mono text-sm text-foreground">
-                  {feedback?.highlight}
+                <p className="font-mono text-base leading-relaxed text-foreground">
+                  {feedback?.message}
                 </p>
               </div>
-            </div>
 
-            <div className="flex gap-3">
-              <span className="mt-0.5 text-muted-foreground">→</span>
-              <div>
-                <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                  Focus next time
-                </p>
-                <p className="font-mono text-sm text-foreground">
-                  {feedback?.focusNext}
-                </p>
+              <Separator />
+
+              <div className="flex gap-3">
+                <span className="mt-0.5 text-primary">↑</span>
+                <div>
+                  <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                    What went well
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    {feedback?.highlight}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="h-px bg-border" />
-
-            {(feedback?.pointsEarned ?? 0) > 0 && (
-              <div className="flex items-center justify-between">
-                <p className="font-mono text-xs text-muted-foreground">
-                  Points earned
-                </p>
-                <p className="font-mono text-lg font-bold text-primary">
-                  +{feedback?.pointsEarned}
-                </p>
+              <div className="flex gap-3">
+                <span className="mt-0.5 text-muted-foreground">→</span>
+                <div>
+                  <p className="mb-1 font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+                    Focus next time
+                  </p>
+                  <p className="font-mono text-sm text-foreground">
+                    {feedback?.focusNext}
+                  </p>
+                </div>
               </div>
-            )}
-          </>
-        )}
-      </div>
+
+              <Separator />
+
+              {(feedback?.pointsEarned ?? 0) > 0 && (
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-xs text-muted-foreground">
+                    Points earned
+                  </p>
+                  <p className="font-mono text-lg font-bold text-primary">
+                    +{feedback?.pointsEarned}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Score grid */}
       {feedbackState !== "loading" && (
@@ -238,12 +245,13 @@ export default function SessionSummary({
       {feedbackState !== "loading" && (
         <div className="flex w-full max-w-xs flex-col items-center gap-3">
           {feedbackState === "ready" && (
-            <button
+            <Button
+              variant="outline"
               onClick={handleSave}
-              className="w-full rounded-full border border-primary px-8 py-3 font-mono text-sm font-bold text-primary transition-all duration-200 hover:bg-primary hover:text-primary-foreground"
+              className="w-full rounded-full"
             >
               Save Progress
-            </button>
+            </Button>
           )}
 
           {feedbackState === "saved" && (
@@ -260,19 +268,20 @@ export default function SessionSummary({
             </div>
           )}
 
-          <button
+          <Button
             onClick={onRestart}
-            className="w-full rounded-full bg-primary px-8 py-3 font-mono text-sm font-bold text-primary-foreground transition-all duration-200 hover:opacity-90"
+            className="w-full rounded-full"
           >
             Start Again
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant="ghost"
             onClick={onBack}
-            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="font-mono text-xs text-muted-foreground"
           >
             ← back to home
-          </button>
+          </Button>
         </div>
       )}
 
@@ -319,15 +328,17 @@ function ScoreCard({
   status: "good" | "bad" | "neutral"
 }) {
   return (
-    <div className="space-y-1 rounded-xl border border-border bg-card p-3.5">
-      <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p
-        className={`font-mono text-lg font-bold ${status === "good" ? "text-primary" : status === "bad" ? "text-destructive" : "text-muted-foreground"}`}
-      >
-        {value}
-      </p>
-    </div>
+    <Card>
+      <CardContent className="space-y-1 p-3.5">
+        <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
+          {label}
+        </p>
+        <p
+          className={`font-mono text-lg font-bold ${status === "good" ? "text-primary" : status === "bad" ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {value}
+        </p>
+      </CardContent>
+    </Card>
   )
 }

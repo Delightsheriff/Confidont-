@@ -1,6 +1,7 @@
 import { Geist, JetBrains_Mono } from "next/font/google"
 import { createClient } from "@/lib/supabase/server"
 import { AuthProvider } from "@/components/auth/AuthProvider"
+import { Toaster } from "sonner"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -41,6 +42,7 @@ export default async function RootLayout({
       <body>
         <ThemeProvider>
           <AuthProvider initialUser={initialUser}>{children}</AuthProvider>
+          <Toaster position="bottom-center" theme="dark" richColors />
         </ThemeProvider>
       </body>
     </html>
